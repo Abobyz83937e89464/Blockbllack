@@ -16,15 +16,15 @@ const CONFIG = {
     figureCellSize: 20 // Размер клетки для фигурки в хотбаре
 };
 
-// Стили блоков (процедурные, как мы и договаривались)
+// Стили блоков
 const BLOCK_STYLES = {
     cellBase: '#150015',
-    cellActive: '#ff0055', // Базовый цвет для хардкора
-    figureBase: '#4a004a', // Цвет фигурок в хотбаре
+    cellActive: '#ff0055', 
+    figureBase: '#4a004a',
 };
 
 let gameData = {
-    gameState: 'LOADING', // LOADING, MENU, PLAYING, FINAL, GAME_OVER
+    gameState: 'LOADING', 
     score: 0,
     calamityTime: CONFIG.calamityTimeout,
     currentFigures: [null, null, null],
@@ -33,7 +33,7 @@ let gameData = {
     images: {}
 };
 
-// Определим базовые фигуры Блок Бласта (координаты клеток)
+// Определим базовые фигуры Блок Бласта
 const FIGURES_DB = [
     [[0,0],[0,1]], // I-2
     [[0,0],[0,1],[0,2]], // I-3
@@ -41,7 +41,7 @@ const FIGURES_DB = [
     [[0,0],[1,0],[2,0],[1,1]], // T-3
     [[0,0],[1,0],[0,1]], // J-2
     [[0,0],[0,1],[1,1],[2,1]], // L-3
-    [[0,0],[0,1],[0,2],[0,3],[0,4]], // I-5 (Самая бесячая)
+    [[0,0],[0,1],[0,2],[0,3],[0,4]], // I-5
 ];
 
 // Элементы DOM
@@ -71,8 +71,10 @@ const ctxs = {
 // --- Ресайз Канвасов ---
 function resizeCanvases() {
     const w = els.wrapper.clientWidth;
-    els.canvas.width = w;
-    els.canvas.height = w; // Поле квадратное
+    // Оставляем место для HUD и хотбара, плитка должна быть квадратной
+    const availableHeight = els.wrapper.clientHeight - 80 - 130; 
+    els.canvas.width = Math.min(w, availableHeight); 
+    els.canvas.height = Math.min(w, availableHeight);
     els.vfxCanvas.width = els.wrapper.clientWidth;
     els.vfxCanvas.height = els.wrapper.clientHeight;
     els.finalCanvas.width = els.wrapper.clientWidth;
@@ -176,7 +178,7 @@ class GameGrid {
     }
 }
 
-// --- Класс Фигурок и Тач-управления ---
+// --- Класс Фигурок и Исправленное Touch-управление ---
 class FigureManager {
     constructor() {
         this.slots = [null, null, null];
@@ -199,8 +201,8 @@ class FigureManager {
             if (this.slots[i] === null) return;
             
             const canvas = document.createElement('canvas');
-            canvas.width = slot.clientWidth;
-            canvas.height = slot.clientHeight;
+            canvas.width = 100; // Фиксированный размер для фигурки
+            canvas.height = 100;
             slot.appendChild(canvas);
             this.drawFigureToSlot(canvas.getContext('2d'), this.slots[i]);
         });
@@ -231,18 +233,22 @@ class FigureManager {
 
         const idx = slot.getAttribute('data-slot');
         gameData.selectedFigureIdx = idx;
-        gameData.draggedFigure = FIGURES_DB.find(f => JSON.stringify(f) === JSON.stringify(this.slots[idx]));
+        // Копируем фигурку
+        gameData.draggedFigure = JSON.parse(JSON.stringify(this.slots[idx]));
+        slot.classList.add('dragging'); // Немного увеличим фигурку при перетаскивании
     }
 
     handleTouchMove(e) {
         if (gameData.gameState !== 'PLAYING' || !gameData.draggedFigure) return;
-        // Мы не двигаем фигурку в DOM (это сложно и глючно на мобилах), мы просто "знаем", где тач
+        e.preventDefault(); // Предотвращаем скролл
     }
 
     handleTouchEnd(e) {
         if (gameData.gameState !== 'PLAYING' || !gameData.draggedFigure) return;
         const touch = e.changedTouches[0];
         const gridPos = els.canvas.getBoundingClientRect();
+        const slot = document.querySelector('.figure-slot.dragging');
+        if (slot) slot.classList.remove('dragging');
 
         // Проверка, опустили ли над полем
         if (touch.clientX >= gridPos.left && touch.clientX <= gridPos.right && touch.clientY >= gridPos.top && touch.clientY <= gridPos.bottom) {
@@ -271,7 +277,7 @@ class FigureManager {
     }
 }
 
-// --- Класс Спецэффектов (VFX) ---
+// --- Класс VFX Engine ---
 class VFXEngine {
     constructor() {
         this.ctx = ctxs.vfx;
@@ -288,7 +294,7 @@ class VFXEngine {
     }
 }
 
-// --- Управление Основными Таймерами и Катаклизмом ---
+// --- Управление Основными Таймерами ---
 let calamityInterval = null;
 
 function initHardcoreTimers() {
@@ -321,10 +327,10 @@ function triggerCalamitySword() {
     const ch = els.vfxCanvas.height;
     const ctx = ctxs.vfx;
 
-    // Анимация диагонального меча (image_0.png)
+    // Анимация диагонального меча
     let startX = cw + 200;
     let startY = -ch / 2;
-    const speed = ch / 10; // Быстрый срез
+    const speed = ch / 10; 
 
     const swordAnimation = setInterval(() => {
         ctx.clearRect(0, 0, cw, ch);
@@ -368,17 +374,14 @@ function startFinalPhase() {
     const ch = els.finalCanvas.height;
     const ctx = ctxs.final;
 
-    // Стейт финальной сцены
     let stairsOffset = 0;
-    let character = { r: CONFIG.gridSize - 1, c: 0 }; // Стартовая позиция в координатах сетки
+    let character = { r: CONFIG.gridSize - 1, c: 0 }; 
 
-    // --- Основной луп финальной сцены ---
     finalLoop = setInterval(() => {
         ctx.clearRect(0, 0, cw, ch);
         ctx.fillStyle = '#fff'; ctx.fillRect(0,0,cw,ch); // Белый фон
 
         // --- 1. Лестница (Белый Limbo) ---
-        // Генерируем бесконечно уходящие белые параллелограммы
         ctx.strokeStyle = '#e0e0e0'; ctx.lineWidth = 1;
         for (let i = 0; i < 20; i++) {
             const h = 40;
@@ -390,7 +393,6 @@ function startFinalPhase() {
         stairsOffset = (stairsOffset + 1) % 40;
 
         // --- 2. Босс (Безымянное Божество) ---
-        // Парит на заднем фоне (slow wave movement)
         const bossY = ch / 2 + Math.sin(Date.now() / 1000) * 15;
         ctx.save();
         ctx.translate(cw / 2, bossY);
@@ -399,7 +401,6 @@ function startFinalPhase() {
         ctx.restore();
 
         // --- 3. Игровое поле и Человечек ---
-        // Мы рендерим сетку 10x10 как платформы
         const cellSizeFinal = cw / CONFIG.gridSize;
         ctx.lineWidth = 2;
         ctx.strokeStyle = '#000';
@@ -419,7 +420,7 @@ function startFinalPhase() {
         const divineSword = gameData.images.divineSword;
         if (Date.now() % 50 === 0) { // Вспышка и вылет мечей
             vfx.flash();
-            // Генерируем 3 горизонтальных следа от мечей (как в image_4.png)
+            // Генерируем 3 горизонтальных следа от мечей
             ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 3;
             for(let j=0; j<3; j++) {
                 let sy = Math.random() * ch;
@@ -451,7 +452,7 @@ const vfx = new VFXEngine();
 function startGame() {
     gameData.score = 0;
     els.score.innerText = `СЧЕТ: 0`;
-    els.startBtn.parentNode.style.animation = 'fadeOut 0.5s forwards';
+    els.mainMenu.style.animation = 'fadeOut 0.5s forwards';
     setTimeout(() => {
         gameData.gameState = 'PLAYING';
         els.mainMenu.classList.remove('active');
