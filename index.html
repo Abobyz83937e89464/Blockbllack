@@ -10,7 +10,7 @@
     <div id="game-container">
         <div id="screen-wrapper">
             <div id="preloader" class="active">
-                <div class="loader">Loading...</div>
+                <div class="loader">LOAD...</div>
             </div>
 
             <div id="main-menu" class="screen">
@@ -22,13 +22,27 @@
             </div>
 
             <div id="game-screen" class="screen">
-                <div id="score-display">СЧЕТ: 0</div>
-                <canvas id="game-canvas"></canvas>
-                <canvas id="vfx-canvas"></canvas> </div>
+                <div id="hud">
+                    <div id="score-display">СЧЕТ: 0</div>
+                    <div id="timer-bar">
+                        <div id="timer-fill"></div>
+                        <span>МЕЧ: <span id="time-left">20s</span></span>
+                    </div>
+                </div>
+                <div id="canvas-wrapper">
+                    <canvas id="game-canvas"></canvas>
+                    <canvas id="vfx-canvas"></canvas> </div>
+                <div id="hotbar">
+                    <div class="figure-slot" data-slot="0"></div>
+                    <div class="figure-slot" data-slot="1"></div>
+                    <div class="figure-slot" data-slot="2"></div>
+                </div>
+            </div>
 
             <div id="final-screen" class="screen">
                 <div class="white-overlay"></div>
-                <canvas id="final-canvas"></canvas> </div>
+                <canvas id="final-canvas"></canvas>
+            </div>
         </div>
     </div>
     <script src="game.js"></script>
