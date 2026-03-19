@@ -1,317 +1,114 @@
+:root {
+    --accent: #009dff;
+    --neon-pink: #ff0055;
+    --bg-dark: #050811;
+}
+
 * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    user-select: none;
-    outline: none;
-    touch-action: none; /* Убираем зум на мобилах */
+    margin: 0; padding: 0; box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none; touch-action: none;
 }
 
 body {
-    background-color: #000;
-    color: #fff;
-    font-family: 'Courier New', Courier, monospace;
-    overflow: hidden;
-    width: 100vw;
-    height: 100vh;
+    background: var(--bg-dark);
+    font-family: 'Orbitron', sans-serif;
+    height: 100vh; overflow: hidden; color: #fff;
+}
+
+/* ФОН ИЗ NEO BROWSER */
+.bg { position: fixed; width: 100%; height: 100%; overflow: hidden; z-index: 0; }
+.blob { 
+    position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.2; 
+    animation: move 6s infinite alternate ease-in-out; 
+}
+.blob:nth-child(1) { width: 400px; height: 400px; background: var(--accent); top: -10%; left: -10%; }
+.blob:nth-child(2) { width: 350px; height: 350px; background: var(--neon-pink); bottom: -10%; right: -10%; animation-delay: -3s; }
+
+@keyframes move {
+    0% { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(50px, 80px) scale(1.2); }
 }
 
 #game-container {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    overflow: hidden;
+    position: relative; z-index: 10;
+    width: 100%; height: 100%;
+    display: flex; flex-direction: column;
 }
 
-#screen-wrapper {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    max-width: 600px; /* Немного увеличим max-width для хотбара */
-    background-color: #0a0a0a;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
-
-.screen {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    display: none;
-    opacity: 0;
-    flex-direction: column;
-    justify-content: flex-start;
-    align-items: center;
-    z-index: 10;
-}
-
-.screen.active {
-    display: flex;
-    animation: fadeIn 0.5s forwards;
-}
-
-/* Прелоадер */
+/* ЗАГРУЗКА */
 #preloader {
-    background-color: #000;
-    color: #ff0055;
-    z-index: 100;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    position: fixed; inset: 0; background: #000;
+    display: flex; justify-content: center; align-items: center;
+    z-index: 1000; transition: opacity 0.5s;
 }
-.loader {
-    font-size: 32px;
-    font-weight: 900;
-    animation: pulse 0.5s infinite;
-    text-shadow: 0 0 10px #ff0055;
-}
+#preloader.hidden { opacity: 0; pointer-events: none; }
 
-/* Главное меню */
-#main-menu {
-    z-index: 20;
-    justify-content: center;
+.loader-content { text-align: center; color: var(--accent); letter-spacing: 4px; }
+.spinner {
+    width: 50px; height: 50px; border: 3px solid rgba(0, 157, 255, 0.1);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 1s infinite linear; margin: 0 auto 20px;
 }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-#main-menu h1 {
-    font-size: 36px;
-    text-align: center;
-    margin-bottom: 80px;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    color: #fff;
-    text-shadow: 0 0 10px rgba(255, 0, 85, 0.5);
+/* ЭКРАНЫ */
+.screen {
+    position: absolute; inset: 0;
+    display: none; flex-direction: column;
+    align-items: center; justify-content: center;
 }
+.screen.active { display: flex; }
 
-.hardcore {
-    color: #ff0055;
-    font-size: 48px;
-    font-weight: 900;
-    text-shadow: 0 0 15px rgba(255, 0, 85, 0.8);
+/* КНОПКА (Вместо картинок) */
+.neo-button {
+    position: relative; width: 280px; height: 65px;
+    background: rgba(0, 157, 255, 0.1);
+    border: 1px solid var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: 0.3s;
+    overflow: hidden; margin-top: 50px;
 }
+.neo-button:hover { background: rgba(0, 157, 255, 0.2); transform: scale(1.05); }
+.neo-button:active { transform: scale(0.95); }
 
-/* Кнопки на основе текстур */
-.ui-button {
-    background-image: url('ui-button.png');
-    background-size: 100% 100%;
-    background-position: center;
-    background-color: transparent;
-    border: none;
-    width: 250px;
-    height: 70px;
-    cursor: pointer;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    color: #fff;
-    font-size: 24px;
-    font-weight: bold;
-    text-transform: uppercase;
-    position: relative;
-    outline: none;
-    transition: transform 0.1s;
+.btn-text { font-weight: 900; letter-spacing: 2px; z-index: 2; }
+.btn-glow {
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    transform: translateX(-100%); transition: 0.5s;
 }
+.neo-button:hover .btn-glow { transform: translateX(100%); }
 
-.ui-button span {
-    z-index: 1;
-}
+/* ГЕЙМПЛЕЙ */
+#game-screen { justify-content: space-between; padding: 20px 0; }
 
-.ui-button:hover {
-    background-image: url('ui-button-active.png');
-    transform: scale(1.03);
-}
-
-.ui-button:active {
-    transform: scale(0.97);
-}
-
-/* Фон меню в стиле Limbo */
-.background-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: radial-gradient(circle, #2a002a 0%, #000 70%);
-    z-index: -1;
-    opacity: 0.5;
-}
-
-/* Игровой экран */
-#game-screen {
-    z-index: 15;
-    justify-content: space-between; /* Плитка, Хотбар, HUD на своих местах */
-}
-
-#hud {
-    width: 100%;
-    padding: 10px 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    position: relative;
-    min-height: 80px;
-}
-
-#score-display {
-    font-size: 28px;
-    font-weight: bold;
-    color: #ff0055;
-    text-align: right;
-    text-shadow: 0 0 10px rgba(255, 0, 85, 0.5);
-    line-height: 1.2;
-}
-
-#timer-bar {
-    position: relative;
-    width: 100%;
-    height: 30px;
-    background-color: #222;
-    border: 2px solid #ff0055;
-    box-shadow: 0 0 10px rgba(255, 0, 85, 0.3);
-}
-
-#timer-fill {
-    height: 100%;
-    width: 100%;
-    background-color: #ff0055;
-    transition: width 0.1s linear;
-}
-
-#timer-bar span {
-    position: absolute;
-    top: 0;
-    left: 10px;
-    line-height: 26px;
-    font-size: 14px;
-    font-weight: bold;
-    color: #000;
-}
+#hud { width: 90%; max-width: 400px; }
+#score-display { font-size: 24px; color: var(--accent); text-align: center; margin-bottom: 10px; }
+#timer-bar { width: 100%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden; }
+#timer-fill { height: 100%; width: 100%; background: var(--neon-pink); transition: width 0.1s linear; }
 
 #canvas-wrapper {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    max-height: 100%;
-    flex: 1; /* Все остальное место для плитки */
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    flex: 1; width: 100%;
+    display: flex; justify-content: center; align-items: center;
 }
-
 #game-canvas {
-    display: block;
-    background-color: #050505;
-    border: 2px solid #333;
+    background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 0 30px rgba(0,0,0,0.5);
 }
 
-#vfx-canvas {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-}
-
-/* ХОТБАР (Полностью переписан) */
 #hotbar {
-    width: 100%;
-    min-height: 130px;
-    display: flex;
-    justify-content: space-around; /* Центрируем фигурки */
-    align-items: center;
-    background-color: #111;
-    border-top: 2px solid #333;
-    padding: 10px;
-    touch-action: none;
+    width: 100%; height: 120px;
+    display: flex; justify-content: center; gap: 15px;
+    padding-bottom: 20px;
 }
-
 .figure-slot {
-    width: 100px; /* Квадратный слот */
-    height: 100px;
-    position: relative;
-    touch-action: none;
+    width: 90px; height: 90px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    display: flex; align-items: center; justify-content: center;
 }
+.figure-slot canvas { width: 80% !important; height: 80% !important; }
 
-/* Убираем "data-slot" текст */
-.figure-slot span {
-    display: none;
-}
-
-/* Обычный канвас для фигурки */
-.figure-slot canvas {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    cursor: grab;
-    touch-action: none;
-}
-
-/* Финальный экран */
-#final-screen {
-    z-index: 30;
-    background-color: #fff;
-    opacity: 0;
-}
-
-#final-canvas {
-    width: 100%;
-    height: 100%;
-}
-
-.white-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: #fff;
-    z-index: 10;
-    opacity: 0;
-    pointer-events: none;
-}
-
-/* Эффекты: Затемнение, Вспышки, Тряска */
-@keyframes fadeIn {
-    to { opacity: 1; }
-}
-
-@keyframes fadeOut {
-    to { opacity: 0; }
-}
-
-@keyframes whiteFlash {
-    0% { opacity: 1; }
-    100% { opacity: 0; }
-}
-
-.white-flash-css {
-    animation: whiteFlash 0.5s forwards;
-}
-
-@keyframes shake {
-    0% { transform: translate(1px, 1px); }
-    10% { transform: translate(-1px, -2px); }
-    20% { transform: translate(-3px, 0px); }
-    30% { transform: translate(3px, 2px); }
-    40% { transform: translate(1px, -1px); }
-    50% { transform: translate(-1px, 2px); }
-    60% { transform: translate(-3px, 1px); }
-    70% { transform: translate(3px, 1px); }
-    80% { transform: translate(-1px, -1px); }
-    90% { transform: translate(1px, 2px); }
-    100% { transform: translate(1px, -2px); }
-}
-
-.screen-shake-css {
-    animation: shake 0.5s;
-}
+h1 { text-align: center; font-size: 32px; letter-spacing: 5px; }
+.hardcore { color: var(--neon-pink); text-shadow: 0 0 15px var(--neon-pink); }
