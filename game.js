@@ -1,26 +1,22 @@
 "use strict";
 
 // ================================================================
-//  BLOCK BLAST NEO — CALAMITY BOSS EDITION
-//  Full Game Engine - Senior-level Refactored
+//  POLYFILL
 // ================================================================
-
-/* ---------- POLYFILL: roundRect ---------- */
-(function () {
-    if (!CanvasRenderingContext2D.prototype.roundRect) {
-        CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
-            if (typeof r === "number") r = [r, r, r, r];
-            if (!Array.isArray(r)) r = [0, 0, 0, 0];
-            const [tl, tr, br, bl] = r;
-            this.moveTo(x + tl, y);
-            this.lineTo(x + w - tr, y);
-            this.quadraticCurveTo(x + w, y, x + w, y + tr);
-            this.lineTo(x + w, y + h - br);
-            this.quadraticCurveTo(x + w, y + h, x + w - br, y + h);
-            this.lineTo(x + bl, y + h);
-            this.quadraticCurveTo(x, y + h, x, y + h - bl);
-            this.lineTo(x, y + tl);
-            this.quadraticCurveTo(x, y, x + tl, y);
+(function(){
+    if(!CanvasRenderingContext2D.prototype.roundRect){
+        CanvasRenderingContext2D.prototype.roundRect=function(x,y,w,h,r){
+            r=typeof r==="number"?r:0;
+            if(r>w/2)r=w/2; if(r>h/2)r=h/2;
+            this.moveTo(x+r,y);
+            this.lineTo(x+w-r,y);
+            this.quadraticCurveTo(x+w,y,x+w,y+r);
+            this.lineTo(x+w,y+h-r);
+            this.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+            this.lineTo(x+r,y+h);
+            this.quadraticCurveTo(x,y+h,x,y+h-r);
+            this.lineTo(x,y+r);
+            this.quadraticCurveTo(x,y,x+r,y);
             this.closePath();
             return this;
         };
@@ -30,162 +26,149 @@
 // ================================================================
 //  CONSTANTS
 // ================================================================
-const GRID = 8;
-const ASCENSION_SCORE = 100;
+const G = 8;
+const ASCEND_SCORE = 100;
 const BOSS_BASE_HP = 5000;
-const MAX_BOSS_WAVES = 3;
-const DRAG_ABOVE_PX = 50;
-const SWORD_FLY_SPEED = 14;
-const AUTO_SWORD_INTERVAL = 10000;   // ms
-const BOSS_REVENGE_INTERVAL = 15000; // ms
-const AUTO_SWORD_DAMAGE = 1000;
-const BLOCKED_CELL = -1;
+const MAX_WAVES = 3;
+const DRAG_OFFSET = 50;
+const BLOCKED = -1;
+
+// Timers (ms)
+const MAIN_SWORD_CD    = 30000;  // main-sword every 30s
+const DIVINE_SWORD_CD  = 10000;  // divine-sword every 10s (boss phase)
+const BOSS_FLASH_CD    = 3000;   // boss flash every 3s
+const BOSS_REVENGE_CD  = 15000;  // boss blocks cells every 15s
+const BOSS_BOMB_CD     = 20000;  // boss bomb every 20s (5 min too long, made harder)
 
 // ================================================================
-//  DOM REFS
+//  DOM
 // ================================================================
-const $ = (sel) => document.querySelector(sel);
-const $$ = (sel) => document.querySelectorAll(sel);
+const $=s=>document.querySelector(s);
+const $$=s=>document.querySelectorAll(s);
 
-const canvasEl = $("#game-canvas");
-const ctx = canvasEl.getContext("2d");
-const cosmicEl = $("#cosmic-canvas");
-const cosmicCtx = cosmicEl ? cosmicEl.getContext("2d") : null;
+const cvs = $("#game-canvas");
+const cx = cvs.getContext("2d");
+const cosmicCvs = $("#cosmic-canvas");
+const cosmicCx = cosmicCvs ? cosmicCvs.getContext("2d") : null;
 
 // ================================================================
-//  ASSET MANIFEST
+//  IMAGES — GitHub Pages same repo
 // ================================================================
-const ASSET_MANIFEST = {
-    boss:        { src: "boss-entity.png",  label: "DEITY SPRITE" },
-    mainSword:   { src: "main-sword.png",   label: "JUDGMENT BLADE" },
+const ASSETS = {
+    boss:        { src: "boss-entity.png",  label: "BOSS ENTITY" },
+    mainSword:   { src: "main-sword.png",   label: "MAIN SWORD" },
     divineSword: { src: "divine-sword.png", label: "DIVINE SWORD" },
 };
-
 const IMG = {};
-let allAssetsReady = false;
 
 // ================================================================
-//  SHAPE DEFINITIONS
+//  SHAPES
 // ================================================================
-const SHAPE_DEFS = [
-    { c: [[1,1],[1,1]],           clr: "#ff0055" },
-    { c: [[1,1,1,1]],             clr: "#009dff" },
-    { c: [[1],[1],[1],[1]],       clr: "#009dff" },
-    { c: [[1,0],[1,0],[1,1]],     clr: "#a855f7" },
-    { c: [[0,1],[0,1],[1,1]],     clr: "#f59e0b" },
-    { c: [[1,1,1],[0,1,0]],       clr: "#10b981" },
-    { c: [[1,1,1],[1,0,0]],       clr: "#ef4444" },
-    { c: [[1,1,1],[0,0,1]],       clr: "#8b5cf6" },
-    { c: [[1,1],[1,0]],           clr: "#ec4899" },
-    { c: [[1]],                   clr: "#fbbf24" },
-    { c: [[1,1],[0,1]],           clr: "#06b6d4" },
-    { c: [[1,1,1]],               clr: "#14b8a6" },
-    { c: [[1],[1],[1]],           clr: "#14b8a6" },
-    { c: [[1,1]],                 clr: "#f97316" },
-    { c: [[1],[1]],               clr: "#f97316" },
+const SHAPES = [
+    {c:[[1,1],[1,1]],       cl:"#ff0055"},
+    {c:[[1,1,1,1]],         cl:"#009dff"},
+    {c:[[1],[1],[1],[1]],    cl:"#009dff"},
+    {c:[[1,0],[1,0],[1,1]],  cl:"#a855f7"},
+    {c:[[0,1],[0,1],[1,1]],  cl:"#f59e0b"},
+    {c:[[1,1,1],[0,1,0]],    cl:"#10b981"},
+    {c:[[1,1,1],[1,0,0]],    cl:"#ef4444"},
+    {c:[[1,1,1],[0,0,1]],    cl:"#8b5cf6"},
+    {c:[[1,1],[1,0]],        cl:"#ec4899"},
+    {c:[[1]],                cl:"#fbbf24"},
+    {c:[[1,1],[0,1]],        cl:"#06b6d4"},
+    {c:[[1,1,1]],            cl:"#14b8a6"},
+    {c:[[1],[1],[1]],        cl:"#14b8a6"},
+    {c:[[1,1]],              cl:"#f97316"},
+    {c:[[1],[1]],            cl:"#f97316"},
 ];
 
 // ================================================================
-//  GAME STATE
+//  STATE
 // ================================================================
-let grid        = [];
-let score       = 0;
-let phase       = "menu"; // menu | normal | ascending | boss | gameover | victory
-let bossHp      = BOSS_BASE_HP;
-let bossWave    = 1;
-let bossAlpha   = 0;
-let bossDrawY   = -200;
-let bossGlitch  = 0;
+let grid = [];
+let score = 0;
+let phase = "menu"; // menu | normal | ascending | boss | gameover | victory
+let bossHp = BOSS_BASE_HP;
+let bossWave = 1;
+let bossAlpha = 0;
 
-let cellSz      = 0;
-let gridOX      = 0;
-let gridOY      = 0;
-let cScale      = 1;
-let bossAreaH   = 0;
+// Boss movement — erratic
+let bossX = 0, bossY = 0;
+let bossTX = 0, bossTY = 0; // target
+let bossVX = 0, bossVY = 0;
+let bossMoveTimer = 0;
+let bossW = 120, bossH = 100;
 
-let slots       = [null, null, null];
-let drag        = null;   // active drag object
-let dragging    = false;
+// Canvas geometry
+let cellSz = 0, gridOX = 0, gridOY = 0, cScale = 1, bossAreaH = 0;
 
-// timers (ms accumulated)
-let autoSwordAcc   = 0;
+// Slots
+let slots = [null,null,null];
+let drag = null, dragging = false;
+
+// Timers (accumulated ms)
+let mainSwordAcc = 0;
+let divineSwordAcc = 0;
+let bossFlashAcc = 0;
 let bossRevengeAcc = 0;
-let lastFrameTs    = 0;
+let bossBombAcc = 0;
+let lastTs = 0;
 
-// animation pools
-let swords          = [];
-let autoSwords      = [];
-let impactParticles = [];
-let breakParticles  = [];
-let lineFX          = [];
-let shakeAmt        = 0;
-let shakeDur        = 0;
+// Animation pools
+let mainSwords = [];     // main-sword.png projectiles (every 30s, normal+boss)
+let divineSwords = [];   // divine-sword.png projectiles (every 10s, boss only)
+let bossFlashes = [];    // boss flash effects
+let bossBombs = [];      // boss bombs falling on grid
+let impactFX = [];
+let breakFX = [];
+let lineFX = [];
+let blockedCells = [];
+let shakeAmt = 0, shakeDur = 0;
 
-// cosmic bg
-let stars     = [];
-let stairSegs = [];
+// Cosmic
+let stars = [], stairSegs = [];
 
-// blocked cells (boss revenge)
-let blockedList = [];
+// Boss flash screen effect
+let bossScreenFlash = 0;
 
 // ================================================================
 //  ASSET LOADER
 // ================================================================
-async function loadAllAssets() {
+async function loadAssets() {
     const bar = $("#progress-bar");
-    const status = $("#status-text");
+    const stat = $("#status-text");
     const list = $("#asset-list");
-
-    const keys = Object.keys(ASSET_MANIFEST);
+    const keys = Object.keys(ASSETS);
     let done = 0;
 
-    function updateProgress() {
-        done++;
-        const pct = (done / keys.length) * 100;
-        if (bar) bar.style.width = pct + "%";
-    }
+    for (const key of keys) {
+        const a = ASSETS[key];
+        if (stat) stat.textContent = `LOADING ${a.label}...`;
 
-    const promises = keys.map((key) => {
-        const entry = ASSET_MANIFEST[key];
-        return new Promise((resolve) => {
-            if (status) status.textContent = `LOADING ${entry.label}...`;
+        const ok = await new Promise(res => {
             const img = new Image();
-            img.src = entry.src;
-            img.onload = () => {
-                IMG[key] = img;
-                updateProgress();
-                if (list) list.innerHTML += `<div class="loaded">✔ ${entry.label}</div>`;
-                resolve(true);
-            };
+            img.crossOrigin = "anonymous";
+            img.src = a.src;
+            img.onload = () => { IMG[key] = img; res(true); };
             img.onerror = () => {
-                updateProgress();
-                if (list) list.innerHTML += `<div class="failed">✘ ${entry.label} — MISSING</div>`;
-                resolve(false);
+                console.warn("MISSING:", a.src);
+                res(false);
             };
+            setTimeout(() => res(false), 5000);
         });
-    });
 
-    const results = await Promise.all(promises);
-    allAssetsReady = results.every(Boolean);
-
-    if (!allAssetsReady) {
-        if (status) status.textContent = "⚠ SOME ASSETS MISSING — GAME MAY LOOK DIFFERENT";
-        await sleep(1500);
-    } else {
-        if (status) status.textContent = "ALL SYSTEMS NOMINAL";
+        done++;
+        if (bar) bar.style.width = ((done/keys.length)*100)+"%";
+        if (list) list.innerHTML += `<div class="${ok?"ok":"fail"}">${ok?"✔":"✘"} ${a.label}</div>`;
     }
-    if (bar) bar.style.width = "100%";
 
-    await sleep(400);
-
+    if (stat) stat.textContent = "ALL SYSTEMS READY";
+    await sleep(500);
     const pre = $("#preloader");
-    if (pre) {
-        pre.classList.add("hidden");
-        setTimeout(() => { pre.style.display = "none"; }, 700);
-    }
+    if (pre) { pre.classList.add("hidden"); setTimeout(()=>pre.style.display="none",700); }
 }
 
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function sleep(ms) { return new Promise(r=>setTimeout(r,ms)); }
 
 // ================================================================
 //  CANVAS SIZING
@@ -193,114 +176,99 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function sizeCanvas() {
     const wrap = $("#canvas-wrapper");
     if (!wrap) return;
-
-    const wW = wrap.clientWidth;
-    const wH = wrap.clientHeight;
-    const pad = 12;
-
-    bossAreaH = (phase === "boss" ? 160 : 0);
-
-    const avail = Math.min(wW - pad * 2, wH - pad * 2 - bossAreaH);
-    cellSz = Math.floor(avail / GRID);
-    const gridPx = cellSz * GRID;
-
-    canvasEl.width  = Math.max(gridPx + pad * 2, wW);
-    canvasEl.height = bossAreaH + gridPx + pad * 2;
-
-    const dScale = Math.min(wW / canvasEl.width, wH / canvasEl.height, 1);
-    canvasEl.style.width  = (canvasEl.width * dScale) + "px";
-    canvasEl.style.height = (canvasEl.height * dScale) + "px";
-    cScale = dScale;
-
-    gridOX = (canvasEl.width - gridPx) / 2;
+    const wW = wrap.clientWidth, wH = wrap.clientHeight;
+    const pad = 10;
+    bossAreaH = phase === "boss" ? 160 : 0;
+    const avail = Math.min(wW - pad*2, wH - pad*2 - bossAreaH);
+    cellSz = Math.floor(avail / G);
+    const gPx = cellSz * G;
+    cvs.width = Math.max(gPx + pad*2, wW);
+    cvs.height = bossAreaH + gPx + pad*2;
+    const ds = Math.min(wW/cvs.width, wH/cvs.height, 1);
+    cvs.style.width = (cvs.width*ds)+"px";
+    cvs.style.height = (cvs.height*ds)+"px";
+    cScale = ds;
+    gridOX = (cvs.width - gPx)/2;
     gridOY = bossAreaH + pad;
 
-    if (cosmicEl) {
-        cosmicEl.width  = window.innerWidth;
-        cosmicEl.height = window.innerHeight;
+    if (cosmicCvs) { cosmicCvs.width = window.innerWidth; cosmicCvs.height = window.innerHeight; }
+
+    // Init boss position in canvas coords
+    if (phase === "boss" && bossX === 0) {
+        bossX = cvs.width/2 - bossW/2;
+        bossY = 10;
+        pickNewBossTarget();
     }
 }
 
 // ================================================================
-//  GRID HELPERS
+//  GRID
 // ================================================================
-function resetGrid() {
-    grid = Array.from({ length: GRID }, () => Array(GRID).fill(0));
-}
-
-function cellFree(x, y) {
-    return x >= 0 && x < GRID && y >= 0 && y < GRID && grid[y][x] === 0;
-}
+function resetGrid() { grid = Array.from({length:G}, ()=>Array(G).fill(0)); }
 
 function canPlace(cells, gx, gy) {
-    for (let r = 0; r < cells.length; r++)
-        for (let c = 0; c < cells[r].length; c++)
+    for (let r=0;r<cells.length;r++)
+        for (let c=0;c<cells[r].length;c++)
             if (cells[r][c]) {
-                const nx = gx + c, ny = gy + r;
-                if (nx < 0 || nx >= GRID || ny < 0 || ny >= GRID) return false;
-                if (grid[ny][nx] !== 0) return false;
+                const nx=gx+c, ny=gy+r;
+                if (nx<0||nx>=G||ny<0||ny>=G) return false;
+                if (grid[ny][nx]!==0) return false;
             }
     return true;
 }
 
 function placeOnGrid(cells, color, gx, gy) {
-    for (let r = 0; r < cells.length; r++)
-        for (let c = 0; c < cells[r].length; c++)
-            if (cells[r][c])
-                grid[gy + r][gx + c] = color;
+    for (let r=0;r<cells.length;r++)
+        for (let c=0;c<cells[r].length;c++)
+            if (cells[r][c]) grid[gy+r][gx+c] = color;
 }
 
 // ================================================================
-//  SLOT / SHAPE MANAGEMENT
+//  SLOTS
 // ================================================================
-function randomShape() {
-    const d = SHAPE_DEFS[Math.floor(Math.random() * SHAPE_DEFS.length)];
-    return { cells: d.c.map(r => [...r]), color: d.clr, used: false };
+function rndShape() {
+    const d = SHAPES[Math.floor(Math.random()*SHAPES.length)];
+    return { cells: d.c.map(r=>[...r]), color: d.cl, used: false };
 }
 
 function fillSlots() {
-    const elems = $$(".slot");
-    for (let i = 0; i < 3; i++) {
-        slots[i] = randomShape();
-        renderSlotMini(elems[i], slots[i]);
-        elems[i].classList.remove("used", "dragging");
+    const els = $$(".slot");
+    for (let i=0;i<3;i++) {
+        slots[i] = rndShape();
+        renderMini(els[i], slots[i]);
+        els[i].classList.remove("used","dragging");
     }
 }
 
-function renderSlotMini(el, shape) {
+function renderMini(el, s) {
     el.innerHTML = "";
     const mc = document.createElement("canvas");
-    const maxDim = Math.max(shape.cells.length, shape.cells[0].length);
-    const unit = Math.floor(56 / Math.max(maxDim, 2));
-    mc.width = 68; mc.height = 68;
+    const maxD = Math.max(s.cells.length, s.cells[0].length);
+    const u = Math.floor(52/Math.max(maxD,2));
+    mc.width=66; mc.height=66;
     const m = mc.getContext("2d");
-    const ox = (68 - shape.cells[0].length * unit) / 2;
-    const oy = (68 - shape.cells.length * unit) / 2;
-
-    shape.cells.forEach((row, r) => row.forEach((v, c) => {
-        if (!v) return;
-        m.fillStyle = shape.color;
-        m.shadowColor = shape.color;
-        m.shadowBlur = 5;
-        m.beginPath();
-        m.roundRect(ox + c * unit + 1, oy + r * unit + 1, unit - 2, unit - 2, 3);
-        m.fill();
-        m.shadowBlur = 0;
-        m.fillStyle = "rgba(255,255,255,0.22)";
-        m.fillRect(ox + c * unit + 2, oy + r * unit + 2, unit - 4, 2);
+    const ox = (66-s.cells[0].length*u)/2;
+    const oy = (66-s.cells.length*u)/2;
+    s.cells.forEach((row,r)=>row.forEach((v,c)=>{
+        if(!v)return;
+        m.fillStyle=s.color; m.shadowColor=s.color; m.shadowBlur=5;
+        m.beginPath(); m.roundRect(ox+c*u+1, oy+r*u+1, u-2, u-2, 3); m.fill();
+        m.shadowBlur=0;
+        m.fillStyle="rgba(255,255,255,0.2)";
+        m.fillRect(ox+c*u+2, oy+r*u+2, u-4, 2);
     }));
     el.appendChild(mc);
 }
 
-function allSlotsUsed() { return slots.every(s => !s || s.used); }
+function allUsed() { return slots.every(s=>!s||s.used); }
 
-function anyMoveExists() {
-    for (let i = 0; i < 3; i++) {
-        if (!slots[i] || slots[i].used) continue;
-        const cs = slots[i].cells;
-        for (let gy = 0; gy <= GRID - cs.length; gy++)
-            for (let gx = 0; gx <= GRID - cs[0].length; gx++)
-                if (canPlace(cs, gx, gy)) return true;
+function anyMove() {
+    for (let i=0;i<3;i++) {
+        if (!slots[i]||slots[i].used) continue;
+        const cs=slots[i].cells;
+        for (let gy=0;gy<=G-cs.length;gy++)
+            for (let gx=0;gx<=G-cs[0].length;gx++)
+                if (canPlace(cs,gx,gy)) return true;
     }
     return false;
 }
@@ -309,479 +277,585 @@ function anyMoveExists() {
 //  LINE CLEARING
 // ================================================================
 function clearLines() {
-    let rows = [], cols = [];
-
-    for (let y = 0; y < GRID; y++) {
-        if (grid[y].every(c => c !== 0 && c !== BLOCKED_CELL)) rows.push(y);
+    let rows=[], cols=[];
+    for (let y=0;y<G;y++) {
+        if (grid[y].every(c=>c!==0&&c!==BLOCKED)) rows.push(y);
     }
-    for (let x = 0; x < GRID; x++) {
-        let full = true;
-        for (let y = 0; y < GRID; y++)
-            if (grid[y][x] === 0 || grid[y][x] === BLOCKED_CELL) { full = false; break; }
-        if (full) cols.push(x);
+    for (let x=0;x<G;x++) {
+        let ok=true;
+        for (let y=0;y<G;y++) if(grid[y][x]===0||grid[y][x]===BLOCKED){ok=false;break;}
+        if (ok) cols.push(x);
     }
-
     const total = rows.length + cols.length;
-    if (total === 0) return 0;
+    if (total===0) return 0;
 
-    // particles
-    rows.forEach(y => {
-        for (let x = 0; x < GRID; x++)
-            spawnBreak(gridOX + x * cellSz + cellSz / 2, gridOY + y * cellSz + cellSz / 2, grid[y][x]);
+    rows.forEach(y=>{
+        for(let x=0;x<G;x++)
+            spawnBreak(gridOX+x*cellSz+cellSz/2, gridOY+y*cellSz+cellSz/2, grid[y][x]);
     });
-    cols.forEach(x => {
-        for (let y = 0; y < GRID; y++)
-            if (!rows.includes(y))
-                spawnBreak(gridOX + x * cellSz + cellSz / 2, gridOY + y * cellSz + cellSz / 2, grid[y][x]);
+    cols.forEach(x=>{
+        for(let y=0;y<G;y++) if(!rows.includes(y))
+            spawnBreak(gridOX+x*cellSz+cellSz/2, gridOY+y*cellSz+cellSz/2, grid[y][x]);
     });
 
-    // line flash
-    rows.forEach(y => lineFX.push({ type: "row", idx: y, a: 1, t: 22 }));
-    cols.forEach(x => lineFX.push({ type: "col", idx: x, a: 1, t: 22 }));
+    rows.forEach(y=>lineFX.push({type:"row",idx:y,a:1,t:20}));
+    cols.forEach(x=>lineFX.push({type:"col",idx:x,a:1,t:20}));
 
-    // clear grid
-    rows.forEach(y => grid[y].fill(0));
-    cols.forEach(x => { for (let y = 0; y < GRID; y++) grid[y][x] = 0; });
+    rows.forEach(y=>grid[y].fill(0));
+    cols.forEach(x=>{for(let y=0;y<G;y++)grid[y][x]=0;});
 
-    // remove any blocks on cleared lines
-    blockedList = blockedList.filter(b => !rows.includes(b.y) && !cols.includes(b.x));
+    blockedCells = blockedCells.filter(b=>!rows.includes(b.y)&&!cols.includes(b.x));
 
-    // scoring
-    const pts = total * 50 * (total > 1 ? 2 : 1);
+    const pts = total*50*(total>1?2:1);
     score += pts;
-    updateScoreUI();
+    updateScore();
 
-    // spawn main-sword projectile toward boss
-    if (phase === "boss") {
-        rows.forEach(y =>
-            spawnMainSword(gridOX + GRID * cellSz / 2, gridOY + y * cellSz + cellSz / 2, total));
-        cols.forEach(x =>
-            spawnMainSword(gridOX + x * cellSz + cellSz / 2, gridOY + GRID * cellSz / 2, total));
+    if (phase==="boss") {
+        // divine swords already handle boss damage separately
+        // line clear gives small damage
+        bossHp -= total * 30;
+        if(bossHp<0)bossHp=0;
+        syncBossHUD();
+        shake(4,8);
+        if(bossHp<=0) onBossKill();
     }
-
     return total;
 }
 
-// ================================================================
-//  SCORE UI
-// ================================================================
-function updateScoreUI() {
-    const el = $("#score");
-    if (el) el.textContent = score.toString().padStart(4, "0");
+function updateScore() {
+    const el=$("#score"); if(el) el.textContent=score.toString().padStart(4,"0");
 }
 
 // ================================================================
-//  MAIN SWORD (line clear → boss)
+//  MAIN SWORD (main-sword.png) — every 30s from bottom
 // ================================================================
-function spawnMainSword(fx, fy, combo) {
-    const tx = canvasEl.width / 2 + (Math.random() - 0.5) * 30;
-    const ty = bossDrawY + 70;
-    for (let i = 0; i < Math.min(combo, 3); i++) {
-        swords.push({
-            x: fx + (Math.random() - 0.5) * 20,
-            y: fy,
-            tx, ty,
-            rot: 0,
-            sc: 0.55 + Math.random() * 0.2,
-            alpha: 1,
-            spd: SWORD_FLY_SPEED + Math.random() * 3,
-            dmg: 80 * combo,
-            trail: [],
-            alive: true,
-        });
-    }
+function spawnMainSword() {
+    const sx = cvs.width/2 + (Math.random()-0.5)*100;
+    const sy = cvs.height + 50;
+    // flies straight up and off screen, clearing random blocks it passes
+    mainSwords.push({
+        x: sx, y: sy,
+        speed: 10 + Math.random()*3,
+        rot: 0,
+        alpha: 1,
+        scale: 0.8,
+        alive: true,
+        cleared: false,
+    });
 }
 
 function updateMainSwords() {
-    swords.forEach(s => {
-        if (!s.alive) return;
-        s.trail.push({ x: s.x, y: s.y, a: 0.7 });
-        if (s.trail.length > 8) s.trail.shift();
-        s.trail.forEach(t => (t.a *= 0.82));
+    mainSwords.forEach(s=>{
+        if(!s.alive) return;
+        s.y -= s.speed;
+        s.rot += 0.03;
 
-        const dx = s.tx - s.x, dy = s.ty - s.y;
-        const d = Math.hypot(dx, dy);
-        if (d < 22) {
-            s.alive = false;
-            bossHp -= s.dmg;
-            if (bossHp < 0) bossHp = 0;
-            syncBossHUD();
-            spawnImpact(s.x, s.y, 20);
-            shake(6, 12);
-            bossGlitch = 18;
-            if (bossHp <= 0) onBossKill();
-        } else {
-            s.x += (dx / d) * s.spd;
-            s.y += (dy / d) * s.spd;
-            s.rot = Math.atan2(dy, dx) - Math.PI / 2;
+        // when it passes through grid, clear some blocks
+        if (!s.cleared && s.y < gridOY + G*cellSz && s.y > gridOY) {
+            s.cleared = true;
+            // clear 3-5 random filled cells
+            let cleared = 0, attempts = 0;
+            while (cleared < 4 && attempts < 40) {
+                attempts++;
+                const rx = Math.floor(Math.random()*G);
+                const ry = Math.floor(Math.random()*G);
+                if (grid[ry][rx] !== 0 && grid[ry][rx] !== BLOCKED) {
+                    spawnBreak(gridOX+rx*cellSz+cellSz/2, gridOY+ry*cellSz+cellSz/2, grid[ry][rx]);
+                    grid[ry][rx] = 0;
+                    cleared++;
+                }
+            }
+            shake(5,10);
         }
+
+        if (s.y < -150) s.alive = false;
     });
-    swords = swords.filter(s => s.alive);
+    mainSwords = mainSwords.filter(s=>s.alive);
 }
 
 function drawMainSwords() {
-    swords.forEach(s => {
-        // trail
-        s.trail.forEach(t => {
-            ctx.globalAlpha = t.a * 0.35;
-            ctx.fillStyle = "#fbbf24";
-            ctx.beginPath();
-            ctx.arc(t.x, t.y, 4, 0, Math.PI * 2);
-            ctx.fill();
-        });
-        ctx.globalAlpha = s.alpha;
-
-        ctx.save();
-        ctx.translate(s.x, s.y);
-        ctx.rotate(s.rot);
-        ctx.scale(s.sc, s.sc);
+    mainSwords.forEach(s=>{
+        cx.save();
+        cx.globalAlpha = s.alpha;
+        cx.translate(s.x, s.y);
+        cx.rotate(s.rot);
+        cx.scale(s.scale, s.scale);
 
         if (IMG.mainSword) {
-            const sw = 50, sh = 100;
-            ctx.drawImage(IMG.mainSword, -sw / 2, -sh / 2, sw, sh);
+            const w=60, h=120;
+            // glow behind
+            cx.shadowColor = "#fbbf24";
+            cx.shadowBlur = 25;
+            cx.drawImage(IMG.mainSword, -w/2, -h/2, w, h);
+            cx.shadowBlur = 0;
         } else {
-            drawFallbackSword(ctx, "#fbbf24");
+            drawFallbackSword(cx, "#fbbf24");
         }
-        ctx.restore();
-        ctx.globalAlpha = 1;
+        cx.restore();
     });
 }
 
 // ================================================================
-//  AUTO (DIVINE) SWORD — every 10 s
+//  DIVINE SWORD (divine-sword.png) — every 10s in boss phase
+//  Flies from bottom through grid clearing BLOCKED cells, hits boss for huge damage
 // ================================================================
-function spawnAutoSword() {
-    const startX = canvasEl.width / 2;
-    const startY = canvasEl.height + 60;
-    const tx = canvasEl.width / 2;
-    const ty = bossDrawY + 70;
+function spawnDivineSword() {
+    const sx = cvs.width/2 + (Math.random()-0.5)*60;
+    const sy = cvs.height + 60;
+    const tx = bossX + bossW/2 + (Math.random()-0.5)*30;
+    const ty = bossY + bossH/2;
 
-    autoSwords.push({
-        x: startX,
-        y: startY,
+    divineSwords.push({
+        x: sx, y: sy,
         tx, ty,
+        speed: 16,
         rot: 0,
-        sc: 1.0,
         alpha: 1,
-        spd: SWORD_FLY_SPEED * 1.2,
-        phase: "fly-through",  // fly-through → impact
+        scale: 1.0,
         trail: [],
         alive: true,
         clearedBlocked: false,
+        dmg: 500 * bossWave,
     });
 }
 
-function updateAutoSwords() {
-    autoSwords.forEach(s => {
-        if (!s.alive) return;
+function updateDivineSwords() {
+    divineSwords.forEach(s=>{
+        if(!s.alive) return;
 
-        s.trail.push({ x: s.x, y: s.y, a: 0.9 });
-        if (s.trail.length > 14) s.trail.shift();
-        s.trail.forEach(t => (t.a *= 0.85));
+        s.trail.push({x:s.x, y:s.y, a:0.9});
+        if(s.trail.length>12) s.trail.shift();
+        s.trail.forEach(t=>t.a*=0.83);
 
-        // clear blocked cells as it flies through the grid area
-        if (!s.clearedBlocked && s.y < gridOY + GRID * cellSz && s.y > gridOY) {
+        // clear blocked cells when passing grid
+        if (!s.clearedBlocked && s.y < gridOY + G*cellSz && s.y > gridOY) {
             s.clearedBlocked = true;
-            clearAllBlockedCells();
+            clearAllBlocked();
+            // also destroy some regular blocks for chaos
+            let n = 0, att = 0;
+            while(n<3 && att<30){
+                att++;
+                const rx=Math.floor(Math.random()*G), ry=Math.floor(Math.random()*G);
+                if(grid[ry][rx]!==0 && grid[ry][rx]!==BLOCKED){
+                    spawnBreak(gridOX+rx*cellSz+cellSz/2, gridOY+ry*cellSz+cellSz/2, grid[ry][rx]);
+                    grid[ry][rx]=0; n++;
+                }
+            }
+            shake(8,15);
         }
 
-        const dx = s.tx - s.x, dy = s.ty - s.y;
-        const d = Math.hypot(dx, dy);
+        // update target to current boss position
+        s.tx = bossX + bossW/2;
+        s.ty = bossY + bossH/2;
 
-        if (d < 30) {
+        const dx=s.tx-s.x, dy=s.ty-s.y;
+        const d=Math.hypot(dx,dy);
+
+        if (d < 35) {
             s.alive = false;
-            bossHp -= AUTO_SWORD_DAMAGE;
-            if (bossHp < 0) bossHp = 0;
+            bossHp -= s.dmg;
+            if(bossHp<0)bossHp=0;
             syncBossHUD();
-            spawnImpact(s.x, s.y, 40);
-            shake(14, 24);
-            bossGlitch = 30;
+            spawnImpact(s.x, s.y, 45);
+            shake(16, 28);
+            bossScreenFlash = 10;
             flashScreen("heavy");
-            if (bossHp <= 0) onBossKill();
+            if(bossHp<=0) onBossKill();
         } else {
-            s.x += (dx / d) * s.spd;
-            s.y += (dy / d) * s.spd;
-            s.rot = Math.atan2(dy, dx) - Math.PI / 2;
+            s.x += (dx/d)*s.speed;
+            s.y += (dy/d)*s.speed;
+            s.rot = Math.atan2(dy,dx) - Math.PI/2;
         }
     });
-    autoSwords = autoSwords.filter(s => s.alive);
+    divineSwords = divineSwords.filter(s=>s.alive);
 }
 
-function drawAutoSwords() {
-    autoSwords.forEach(s => {
-        // glowing trail
-        s.trail.forEach(t => {
-            ctx.globalAlpha = t.a * 0.45;
-            ctx.fillStyle = "#a855f7";
-            ctx.shadowColor = "#a855f7";
-            ctx.shadowBlur = 10;
-            ctx.beginPath();
-            ctx.arc(t.x, t.y, 6, 0, Math.PI * 2);
-            ctx.fill();
+function drawDivineSwords() {
+    divineSwords.forEach(s=>{
+        // trail
+        s.trail.forEach(t=>{
+            cx.globalAlpha = t.a * 0.4;
+            cx.fillStyle = "#a855f7";
+            cx.shadowColor = "#a855f7";
+            cx.shadowBlur = 12;
+            cx.beginPath(); cx.arc(t.x,t.y,7,0,Math.PI*2); cx.fill();
         });
-        ctx.shadowBlur = 0;
-        ctx.globalAlpha = s.alpha;
+        cx.shadowBlur=0; cx.globalAlpha=s.alpha;
 
-        ctx.save();
-        ctx.translate(s.x, s.y);
-        ctx.rotate(s.rot);
-        ctx.scale(s.sc, s.sc);
+        cx.save();
+        cx.translate(s.x, s.y);
+        cx.rotate(s.rot);
+        cx.scale(s.scale, s.scale);
 
         if (IMG.divineSword) {
-            const sw = 64, sh = 130;
-            ctx.drawImage(IMG.divineSword, -sw / 2, -sh / 2, sw, sh);
+            const w=70, h=140;
+            cx.shadowColor = "#e040fb";
+            cx.shadowBlur = 30;
+            cx.drawImage(IMG.divineSword, -w/2, -h/2, w, h);
+            cx.shadowBlur = 0;
         } else {
-            drawFallbackSword(ctx, "#a855f7");
+            drawFallbackSword(cx, "#a855f7");
         }
-        ctx.restore();
-        ctx.globalAlpha = 1;
+        cx.restore();
+        cx.globalAlpha=1;
     });
 }
 
 function drawFallbackSword(c, color) {
-    c.fillStyle = color;
-    c.shadowColor = color;
-    c.shadowBlur = 12;
+    c.fillStyle=color; c.shadowColor=color; c.shadowBlur=12;
     c.beginPath();
-    c.moveTo(0, -45);
-    c.lineTo(-9, 12);
-    c.lineTo(0, 6);
-    c.lineTo(9, 12);
-    c.closePath();
-    c.fill();
-    c.fillStyle = "#999";
-    c.fillRect(-3, 12, 6, 16);
-    c.fillStyle = color;
-    c.fillRect(-11, 10, 22, 4);
-    c.shadowBlur = 0;
+    c.moveTo(0,-45); c.lineTo(-9,12); c.lineTo(0,6); c.lineTo(9,12);
+    c.closePath(); c.fill();
+    c.fillStyle="#999"; c.fillRect(-3,12,6,16);
+    c.fillStyle=color; c.fillRect(-11,10,22,4);
+    c.shadowBlur=0;
 }
 
 // ================================================================
-//  BLOCKED CELLS (Boss Revenge)
+//  BOSS — ERRATIC MOVEMENT
+// ================================================================
+function pickNewBossTarget() {
+    const margin = 20;
+    bossTX = margin + Math.random()*(cvs.width - bossW - margin*2);
+    bossTY = 5 + Math.random() * (bossAreaH - bossH - 10);
+    bossMoveTimer = 500 + Math.random()*800; // ms until next target
+}
+
+function updateBossMovement(dt) {
+    if (phase !== "boss") return;
+    bossMoveTimer -= dt;
+    if (bossMoveTimer <= 0) pickNewBossTarget();
+
+    // Lerp aggressively — the boss is FAST and erratic
+    const lerpSpeed = 0.06 + bossWave * 0.02;
+    bossX += (bossTX - bossX) * lerpSpeed;
+    bossY += (bossTY - bossY) * lerpSpeed;
+
+    // Add jitter
+    bossX += (Math.random()-0.5) * 2 * bossWave;
+    bossY += (Math.random()-0.5) * 1.5;
+}
+
+// ================================================================
+//  BOSS FLASH (every 3s)
+// ================================================================
+function bossFlash() {
+    if (phase !== "boss") return;
+    bossScreenFlash = 8;
+    // brief screen flash
+    const flash = $("#white-flash");
+    if (flash) {
+        flash.className = "white-flash flash-in";
+        setTimeout(()=>{ flash.className = "white-flash flash-out"; }, 80);
+        setTimeout(()=>{ flash.className = "white-flash"; }, 500);
+    }
+    shake(3, 6);
+}
+
+// ================================================================
+//  BOSS REVENGE — block cells
 // ================================================================
 function bossBlockCells() {
     if (phase !== "boss") return;
-    const count = 2;
-    let placed = 0, attempts = 0;
-    while (placed < count && attempts < 80) {
-        attempts++;
-        const rx = Math.floor(Math.random() * GRID);
-        const ry = Math.floor(Math.random() * GRID);
-        if (grid[ry][rx] === 0) {
-            grid[ry][rx] = BLOCKED_CELL;
-            blockedList.push({ x: rx, y: ry });
+    const count = 2 + Math.floor(bossWave * 0.5);
+    let placed=0, att=0;
+    while(placed<count && att<80) {
+        att++;
+        const rx=Math.floor(Math.random()*G), ry=Math.floor(Math.random()*G);
+        if(grid[ry][rx]===0){
+            grid[ry][rx]=BLOCKED;
+            blockedCells.push({x:rx,y:ry});
+            spawnBreak(gridOX+rx*cellSz+cellSz/2, gridOY+ry*cellSz+cellSz/2, "#a855f7");
             placed++;
         }
     }
-    if (placed > 0) {
-        bossGlitch = 25;
-        shake(5, 10);
+    if(placed>0){ shake(6,12); }
+}
+
+function clearAllBlocked() {
+    blockedCells.forEach(b=>{
+        if(grid[b.y][b.x]===BLOCKED){
+            grid[b.y][b.x]=0;
+            spawnBreak(gridOX+b.x*cellSz+cellSz/2, gridOY+b.y*cellSz+cellSz/2, "#a855f7");
+        }
+    });
+    blockedCells = [];
+}
+
+// ================================================================
+//  BOSS BOMBS (every 20s) — fly up then land on grid
+// ================================================================
+function spawnBossBombs() {
+    if (phase !== "boss") return;
+    const count = 2 + bossWave;
+    for (let i=0; i<count; i++) {
+        const tx = Math.floor(Math.random()*G);
+        const ty = Math.floor(Math.random()*G);
+        const worldTX = gridOX + tx*cellSz + cellSz/2;
+        const worldTY = gridOY + ty*cellSz + cellSz/2;
+
+        bossBombs.push({
+            // start from boss
+            x: bossX + bossW/2,
+            y: bossY + bossH/2,
+            tx: worldTX, ty: worldTY,
+            gridX: tx, gridY: ty,
+            phase: "up", // up then down
+            peakY: -50 - Math.random()*80,
+            upSpeed: 8 + Math.random()*4,
+            downSpeed: 0,
+            timer: 0,
+            alive: true,
+            alpha: 1,
+        });
     }
 }
 
-function clearAllBlockedCells() {
-    blockedList.forEach(b => {
-        if (grid[b.y][b.x] === BLOCKED_CELL) {
-            grid[b.y][b.x] = 0;
-            spawnBreak(
-                gridOX + b.x * cellSz + cellSz / 2,
-                gridOY + b.y * cellSz + cellSz / 2,
-                "#a855f7"
-            );
+function updateBossBombs(dt) {
+    bossBombs.forEach(b=>{
+        if(!b.alive) return;
+
+        if(b.phase === "up") {
+            b.y -= b.upSpeed;
+            b.x += (b.tx - b.x) * 0.02;
+            if(b.y <= b.peakY) {
+                b.phase = "hang";
+                b.timer = 800; // hang for 800ms
+            }
+        } else if(b.phase === "hang") {
+            b.timer -= dt;
+            b.x += (b.tx - b.x) * 0.05; // center over target
+            b.alpha = 0.5 + Math.sin(performance.now()*0.02)*0.5;
+            if(b.timer <= 0) {
+                b.phase = "down";
+                b.downSpeed = 2;
+            }
+        } else if(b.phase === "down") {
+            b.downSpeed += 0.8; // accelerate
+            b.y += b.downSpeed;
+            b.x += (b.tx - b.x) * 0.1;
+            b.alpha = 1;
+
+            if(b.y >= b.ty) {
+                b.alive = false;
+                // impact — block the cell
+                const gx = b.gridX, gy = b.gridY;
+                if(gx>=0&&gx<G&&gy>=0&&gy<G){
+                    if(grid[gy][gx]===0){
+                        grid[gy][gx] = BLOCKED;
+                        blockedCells.push({x:gx,y:gy});
+                    } else if(grid[gy][gx]!==BLOCKED) {
+                        // destroy the block
+                        spawnBreak(b.tx, b.ty, grid[gy][gx]);
+                        grid[gy][gx] = BLOCKED;
+                        blockedCells.push({x:gx,y:gy});
+                    }
+                }
+                spawnImpact(b.tx, b.ty, 15);
+                shake(4,8);
+            }
         }
     });
-    blockedList = [];
+    bossBombs = bossBombs.filter(b=>b.alive);
+}
+
+function drawBossBombs() {
+    bossBombs.forEach(b=>{
+        cx.save();
+        cx.globalAlpha = b.alpha;
+
+        // draw a glowing orb
+        const radius = b.phase==="down" ? 10 + b.downSpeed*0.3 : 8;
+        const grd = cx.createRadialGradient(b.x,b.y,0,b.x,b.y,radius*2);
+        grd.addColorStop(0, "rgba(255,0,85,0.9)");
+        grd.addColorStop(0.5, "rgba(168,85,247,0.5)");
+        grd.addColorStop(1, "transparent");
+        cx.fillStyle = grd;
+        cx.beginPath(); cx.arc(b.x, b.y, radius*2, 0, Math.PI*2); cx.fill();
+
+        cx.fillStyle = "#fff";
+        cx.shadowColor = "#ff0055";
+        cx.shadowBlur = 15;
+        cx.beginPath(); cx.arc(b.x, b.y, radius*0.6, 0, Math.PI*2); cx.fill();
+        cx.shadowBlur = 0;
+
+        // if hanging, draw targeting reticle on grid
+        if(b.phase==="hang" || b.phase==="down") {
+            cx.strokeStyle = `rgba(255,0,85,${0.3+Math.sin(performance.now()*0.015)*0.3})`;
+            cx.lineWidth = 2;
+            cx.setLineDash([4,4]);
+            cx.beginPath(); cx.arc(b.tx, b.ty, cellSz*0.6, 0, Math.PI*2); cx.stroke();
+            cx.setLineDash([]);
+        }
+
+        cx.restore();
+    });
 }
 
 // ================================================================
 //  PARTICLES
 // ================================================================
-function spawnImpact(x, y, n) {
-    for (let i = 0; i < n; i++) {
-        const a = Math.random() * Math.PI * 2;
-        const sp = Math.random() * 9 + 2;
-        impactParticles.push({
-            x, y,
-            vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-            life: 1, decay: 0.02 + Math.random() * 0.03,
-            sz: 2 + Math.random() * 4,
-            clr: Math.random() > 0.4 ? "#ff0055" : "#fbbf24",
-        });
+function spawnImpact(x,y,n) {
+    for(let i=0;i<n;i++){
+        const a=Math.random()*Math.PI*2, sp=Math.random()*10+2;
+        impactFX.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,
+            life:1, decay:0.02+Math.random()*0.03, sz:2+Math.random()*5,
+            clr:Math.random()>0.4?"#ff0055":"#fbbf24"});
     }
 }
-
-function spawnBreak(x, y, clr) {
-    const color = (typeof clr === "string" && clr.startsWith("#")) ? clr : "#ff0055";
-    for (let i = 0; i < 5; i++) {
-        const a = Math.random() * Math.PI * 2;
-        const sp = Math.random() * 3 + 1;
-        breakParticles.push({
-            x, y,
-            vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-            life: 1, decay: 0.025 + Math.random() * 0.03,
-            sz: 1.5 + Math.random() * 2.5,
-            clr: color,
-        });
+function spawnBreak(x,y,clr) {
+    const c=(typeof clr==="string"&&clr.startsWith("#"))?clr:"#ff0055";
+    for(let i=0;i<5;i++){
+        const a=Math.random()*Math.PI*2, sp=Math.random()*3+1;
+        breakFX.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,
+            life:1, decay:0.025+Math.random()*0.03, sz:1.5+Math.random()*2.5, clr:c});
     }
 }
 
 function updateParticles() {
-    impactParticles.forEach(p => {
-        p.x += p.vx; p.y += p.vy;
-        p.vx *= 0.94; p.vy *= 0.94;
-        p.life -= p.decay;
-    });
-    impactParticles = impactParticles.filter(p => p.life > 0);
-
-    breakParticles.forEach(p => {
-        p.x += p.vx; p.y += p.vy; p.vy += 0.12;
-        p.life -= p.decay;
-    });
-    breakParticles = breakParticles.filter(p => p.life > 0);
-
-    lineFX.forEach(e => { e.t--; e.a = e.t / 22; });
-    lineFX = lineFX.filter(e => e.t > 0);
+    impactFX.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vx*=0.93;p.vy*=0.93;p.life-=p.decay;});
+    impactFX=impactFX.filter(p=>p.life>0);
+    breakFX.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=0.12;p.life-=p.decay;});
+    breakFX=breakFX.filter(p=>p.life>0);
+    lineFX.forEach(e=>{e.t--;e.a=e.t/20;});
+    lineFX=lineFX.filter(e=>e.t>0);
 }
 
 function drawParticles() {
-    impactParticles.forEach(p => {
-        ctx.globalAlpha = p.life;
-        ctx.fillStyle = p.clr;
-        ctx.shadowColor = p.clr;
-        ctx.shadowBlur = 6;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.sz, 0, Math.PI * 2);
-        ctx.fill();
+    impactFX.forEach(p=>{
+        cx.globalAlpha=p.life; cx.fillStyle=p.clr;
+        cx.shadowColor=p.clr; cx.shadowBlur=6;
+        cx.beginPath(); cx.arc(p.x,p.y,p.sz,0,Math.PI*2); cx.fill();
     });
-    ctx.shadowBlur = 0;
-
-    breakParticles.forEach(p => {
-        ctx.globalAlpha = p.life;
-        ctx.fillStyle = p.clr;
-        ctx.fillRect(p.x - p.sz / 2, p.y - p.sz / 2, p.sz, p.sz);
+    cx.shadowBlur=0;
+    breakFX.forEach(p=>{
+        cx.globalAlpha=p.life; cx.fillStyle=p.clr;
+        cx.fillRect(p.x-p.sz/2,p.y-p.sz/2,p.sz,p.sz);
     });
-    ctx.globalAlpha = 1;
-
-    lineFX.forEach(e => {
-        ctx.fillStyle = `rgba(255,255,255,${e.a * 0.45})`;
-        if (e.type === "row")
-            ctx.fillRect(gridOX, gridOY + e.idx * cellSz, GRID * cellSz, cellSz);
-        else
-            ctx.fillRect(gridOX + e.idx * cellSz, gridOY, cellSz, GRID * cellSz);
+    cx.globalAlpha=1;
+    lineFX.forEach(e=>{
+        cx.fillStyle=`rgba(255,255,255,${e.a*0.45})`;
+        if(e.type==="row") cx.fillRect(gridOX, gridOY+e.idx*cellSz, G*cellSz, cellSz);
+        else cx.fillRect(gridOX+e.idx*cellSz, gridOY, cellSz, G*cellSz);
     });
 }
 
 // ================================================================
 //  SCREEN SHAKE
 // ================================================================
-function shake(amount, dur) { shakeAmt = amount; shakeDur = dur; }
-function getShake() {
-    if (shakeDur > 0) {
-        shakeDur--;
-        const i = shakeAmt * (shakeDur / 20);
-        return { x: (Math.random() - 0.5) * i * 2, y: (Math.random() - 0.5) * i * 2 };
-    }
-    return { x: 0, y: 0 };
+function shake(a,d){shakeAmt=a;shakeDur=d;}
+function getShake(){
+    if(shakeDur>0){shakeDur--;const i=shakeAmt*(shakeDur/20);
+        return{x:(Math.random()-0.5)*i*2,y:(Math.random()-0.5)*i*2};}
+    return{x:0,y:0};
+}
+
+function flashScreen(type){
+    const el=$("#white-flash"); if(!el)return;
+    el.className="white-flash flash-in";
+    const hold=type==="heavy"?100:40;
+    setTimeout(()=>{el.className="white-flash flash-hold";},80);
+    setTimeout(()=>{el.className="white-flash flash-out";},hold+80);
+    setTimeout(()=>{el.className="white-flash";},hold+2100);
 }
 
 // ================================================================
-//  WHITE FLASH HELPER
+//  BOSS HUD
 // ================================================================
-function flashScreen(type) {
-    const el = $("#white-flash");
-    if (!el) return;
-    el.className = "white-flash flash-in";
-    const holdTime = type === "heavy" ? 120 : 50;
-    setTimeout(() => el.className = "white-flash flash-hold", 100);
-    setTimeout(() => el.className = "white-flash flash-out", holdTime + 100);
-    setTimeout(() => el.className = "white-flash", holdTime + 1700);
+function syncBossHUD(){
+    const max=BOSS_BASE_HP*bossWave;
+    const r=Math.max(0,bossHp/max);
+    const bar=$("#boss-hp-bar"), txt=$("#boss-hp-text"), tag=$("#boss-wave-tag");
+    if(bar)bar.style.width=(r*100)+"%";
+    if(txt)txt.textContent=`${Math.max(0,Math.floor(bossHp))} / ${max}`;
+    if(tag)tag.textContent=`WAVE ${bossWave}`;
+}
+function showBossHUD(){
+    const el=$("#boss-hud"); if(el){el.classList.remove("hidden");el.classList.add("visible");}
+    const tb=$("#auto-sword-timer-box"); if(tb){tb.classList.remove("hidden");tb.classList.add("visible");}
+}
+function hideBossHUD(){
+    const el=$("#boss-hud"); if(el){el.classList.add("hidden");el.classList.remove("visible");}
+    const tb=$("#auto-sword-timer-box"); if(tb){tb.classList.add("hidden");tb.classList.remove("visible");}
 }
 
 // ================================================================
-//  BOSS HUD SYNC
-// ================================================================
-function syncBossHUD() {
-    const maxHp = BOSS_BASE_HP * bossWave;
-    const ratio = Math.max(0, bossHp / maxHp);
-    const bar = $("#boss-hp-bar");
-    const txt = $("#boss-hp-text");
-    const tag = $("#boss-wave-tag");
-    if (bar) bar.style.width = (ratio * 100) + "%";
-    if (txt) txt.textContent = `${Math.max(0, Math.floor(bossHp))} / ${maxHp}`;
-    if (tag) tag.textContent = `WAVE ${bossWave}`;
-}
-
-function showBossHUD() {
-    const el = $("#boss-hud");
-    if (el) { el.classList.remove("hidden"); el.classList.add("visible"); }
-    const tb = $("#auto-sword-timer-box");
-    if (tb) { tb.classList.remove("hidden"); tb.classList.add("visible"); }
-}
-
-function hideBossHUD() {
-    const el = $("#boss-hud");
-    if (el) { el.classList.add("hidden"); el.classList.remove("visible"); }
-    const tb = $("#auto-sword-timer-box");
-    if (tb) { tb.classList.add("hidden"); tb.classList.remove("visible"); }
-}
-
-// ================================================================
-//  ASCENSION SEQUENCE (score >= 100)
+//  ASCENSION SEQUENCE
 // ================================================================
 async function ascend() {
     phase = "ascending";
 
-    // Phase 1: float UI away
+    // Phase 1: Float UI away
     const container = $("#game-ui-container");
-    if (container) container.classList.add("float-away");
-    await sleep(1600);
+    if(container) container.classList.add("float-away");
+    await sleep(1800);
 
-    // Phase 2: white flash
+    // Phase 2: White flash + hold
     const flash = $("#white-flash");
-    if (flash) flash.className = "white-flash flash-in";
+    if(flash) flash.className = "white-flash flash-in";
     await sleep(200);
-    if (flash) flash.className = "white-flash flash-hold";
+    if(flash) flash.className = "white-flash flash-hold";
+    await sleep(300);
 
-    // Phase 3: "ВОЗНЕСИСЬ"
+    // Phase 3: "ВОЗНЕСИСЬ" — smooth fade in on white background
     const overlay = $("#ascension-overlay");
     const txt = $("#ascension-text");
-    if (overlay) overlay.classList.add("visible");
-    if (txt) txt.textContent = "ВОЗНЕСИСЬ";
-    await sleep(3000);
-
-    // Phase 4: second text
-    if (txt) {
-        txt.style.fontSize = "22px";
-        txt.textContent = "ДА НАЧНЕТСЯ ТВОЕ ФИНАЛЬНОЕ ИСПЫТАНИЕ";
+    if(txt){
+        txt.textContent = "ВОЗНЕСИСЬ";
+        txt.className = "ascension-text fade-in";
+        txt.style.fontSize = "";
     }
+    if(overlay) overlay.classList.add("visible");
     await sleep(3000);
 
-    // Phase 5: fade flash, hide text, reveal boss
-    if (overlay) overlay.classList.remove("visible");
-    if (txt) { txt.textContent = ""; txt.style.fontSize = ""; }
+    // Phase 4: Smooth crossfade to second text
+    if(txt){
+        txt.classList.remove("fade-in");
+        txt.classList.add("fade-out");
+    }
+    await sleep(1500);
+    if(txt){
+        txt.textContent = "ДА НАЧНЕТСЯ ТВОЕ\nФИНАЛЬНОЕ ИСПЫТАНИЕ";
+        txt.style.whiteSpace = "pre-line";
+        txt.style.fontSize = "22px";
+        txt.classList.remove("fade-out");
+        txt.classList.add("fade-in");
+    }
+    await sleep(3500);
 
-    // transition background
-    const bg = $("#bg-layer");
-    if (bg) bg.style.opacity = "0";
-    const cosmic = $("#cosmic-bg");
-    if (cosmic) { cosmic.classList.remove("hidden"); cosmic.classList.add("visible"); }
+    // Phase 5: Fade out text
+    if(txt){
+        txt.classList.remove("fade-in");
+        txt.classList.add("fade-out");
+    }
+    await sleep(1500);
+    if(overlay) overlay.classList.remove("visible");
+    if(txt){ txt.textContent=""; txt.style.fontSize=""; txt.style.whiteSpace=""; txt.className="ascension-text"; }
+
+    // Transition background
+    const bg = $("#bg-layer"); if(bg) bg.style.opacity="0";
+    const cos = $("#cosmic-bg"); if(cos){cos.classList.remove("hidden");cos.classList.add("visible");}
     initCosmos();
 
-    if (flash) flash.className = "white-flash flash-out";
-    await sleep(600);
-    if (flash) flash.className = "white-flash";
+    // Slow fade out white
+    if(flash) flash.className = "white-flash flash-out";
+    await sleep(2000);
+    if(flash) flash.className = "white-flash";
 
-    // reset UI container position
-    if (container) container.classList.remove("float-away");
+    // Restore UI container
+    if(container) container.classList.remove("float-away");
 
-    // enter boss phase
+    // Enter boss phase
     phase = "boss";
     bossHp = BOSS_BASE_HP;
     bossWave = 1;
     bossAlpha = 0;
-    bossDrawY = -200;
-    autoSwordAcc = 0;
+    bossX = 0; bossY = 0;
+    mainSwordAcc = 0;
+    divineSwordAcc = 0;
+    bossFlashAcc = 0;
     bossRevengeAcc = 0;
+    bossBombAcc = 0;
 
     sizeCanvas();
     showBossHUD();
@@ -792,70 +866,52 @@ async function ascend() {
 //  COSMIC BACKGROUND
 // ================================================================
 function initCosmos() {
-    const w = cosmicEl ? cosmicEl.width : 400;
-    const h = cosmicEl ? cosmicEl.height : 800;
-    stars = [];
-    for (let i = 0; i < 220; i++) {
-        stars.push({
-            x: Math.random() * w, y: Math.random() * h,
-            sz: Math.random() * 2 + 0.4,
-            sp: Math.random() * 0.4 + 0.08,
-            br: Math.random(), tw: Math.random() * 0.02 + 0.004,
-        });
+    const w=cosmicCvs?cosmicCvs.width:400, h=cosmicCvs?cosmicCvs.height:800;
+    stars=[];
+    for(let i=0;i<250;i++){
+        stars.push({x:Math.random()*w,y:Math.random()*h,
+            sz:Math.random()*2+0.4, sp:Math.random()*0.4+0.08,
+            br:Math.random(), tw:Math.random()*0.02+0.004});
     }
-    stairSegs = [];
-    for (let i = 0; i < 14; i++) {
-        stairSegs.push({
-            x: w * 0.28 + i * w * 0.035,
-            y: h * 0.88 - i * h * 0.055,
-            w: w * 0.13,
-            h: 5,
-            glow: Math.random(), gd: 1,
-        });
+    stairSegs=[];
+    for(let i=0;i<14;i++){
+        stairSegs.push({x:w*0.28+i*w*0.035, y:h*0.88-i*h*0.055,
+            w:w*0.13, h:5, glow:Math.random(), gd:1});
     }
 }
 
 function drawCosmos() {
-    if (!cosmicCtx || !cosmicEl) return;
-    const w = cosmicEl.width, h = cosmicEl.height;
+    if(!cosmicCx||!cosmicCvs)return;
+    const w=cosmicCvs.width, h=cosmicCvs.height;
+    const g=cosmicCx.createLinearGradient(0,0,0,h);
+    g.addColorStop(0,"#08001a"); g.addColorStop(0.35,"#100030");
+    g.addColorStop(0.65,"#1a0048"); g.addColorStop(1,"#050811");
+    cosmicCx.fillStyle=g; cosmicCx.fillRect(0,0,w,h);
 
-    const g = cosmicCtx.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0, "#08001a");
-    g.addColorStop(0.35, "#100030");
-    g.addColorStop(0.65, "#1a0048");
-    g.addColorStop(1, "#050811");
-    cosmicCtx.fillStyle = g;
-    cosmicCtx.fillRect(0, 0, w, h);
+    const neb=cosmicCx.createRadialGradient(w*0.5,h*0.28,0,w*0.5,h*0.28,w*0.45);
+    neb.addColorStop(0,"rgba(90,0,180,0.14)");
+    neb.addColorStop(0.6,"rgba(40,0,120,0.06)");
+    neb.addColorStop(1,"transparent");
+    cosmicCx.fillStyle=neb; cosmicCx.fillRect(0,0,w,h);
 
-    const neb = cosmicCtx.createRadialGradient(w * 0.5, h * 0.28, 0, w * 0.5, h * 0.28, w * 0.45);
-    neb.addColorStop(0, "rgba(90,0,180,0.14)");
-    neb.addColorStop(0.6, "rgba(40,0,120,0.06)");
-    neb.addColorStop(1, "transparent");
-    cosmicCtx.fillStyle = neb;
-    cosmicCtx.fillRect(0, 0, w, h);
-
-    stars.forEach(s => {
-        s.br += s.tw;
-        const a = 0.25 + Math.abs(Math.sin(s.br)) * 0.75;
-        cosmicCtx.fillStyle = `rgba(255,255,255,${a})`;
-        cosmicCtx.beginPath();
-        cosmicCtx.arc(s.x, s.y, s.sz, 0, Math.PI * 2);
-        cosmicCtx.fill();
-        s.y += s.sp;
-        if (s.y > h) { s.y = 0; s.x = Math.random() * w; }
+    stars.forEach(s=>{
+        s.br+=s.tw;
+        const a=0.25+Math.abs(Math.sin(s.br))*0.75;
+        cosmicCx.fillStyle=`rgba(255,255,255,${a})`;
+        cosmicCx.beginPath(); cosmicCx.arc(s.x,s.y,s.sz,0,Math.PI*2); cosmicCx.fill();
+        s.y+=s.sp; if(s.y>h){s.y=0;s.x=Math.random()*w;}
     });
 
-    stairSegs.forEach(st => {
-        st.glow += 0.018 * st.gd;
-        if (st.glow > 1 || st.glow < 0.25) st.gd *= -1;
-        const a = st.glow * 0.35;
-        cosmicCtx.fillStyle = `rgba(190,170,255,${a})`;
-        cosmicCtx.shadowColor = "rgba(170,150,255,0.5)";
-        cosmicCtx.shadowBlur = 14;
-        cosmicCtx.fillRect(st.x, st.y, st.w, st.h);
-        cosmicCtx.shadowBlur = 0;
-        cosmicCtx.fillStyle = `rgba(255,255,255,${a * 0.4})`;
-        cosmicCtx.fillRect(st.x, st.y, st.w, 1);
+    stairSegs.forEach(st=>{
+        st.glow+=0.018*st.gd;
+        if(st.glow>1||st.glow<0.25)st.gd*=-1;
+        const a=st.glow*0.35;
+        cosmicCx.fillStyle=`rgba(190,170,255,${a})`;
+        cosmicCx.shadowColor="rgba(170,150,255,0.5)"; cosmicCx.shadowBlur=14;
+        cosmicCx.fillRect(st.x,st.y,st.w,st.h);
+        cosmicCx.shadowBlur=0;
+        cosmicCx.fillStyle=`rgba(255,255,255,${a*0.4})`;
+        cosmicCx.fillRect(st.x,st.y,st.w,1);
     });
 }
 
@@ -863,90 +919,77 @@ function drawCosmos() {
 //  BOSS DRAWING
 // ================================================================
 function drawBoss() {
-    if (phase !== "boss") return;
+    if(phase!=="boss") return;
+    if(bossAlpha<1) bossAlpha=Math.min(1,bossAlpha+0.015);
 
-    // animate entrance
-    if (bossAlpha < 1) bossAlpha = Math.min(1, bossAlpha + 0.012);
-    const targetY = 8;
-    if (bossDrawY < targetY) bossDrawY = Math.min(targetY, bossDrawY + 2.5);
+    cx.save();
+    cx.globalAlpha = bossAlpha;
 
-    ctx.save();
-    ctx.globalAlpha = bossAlpha;
+    // Boss aura glow
+    const aura = cx.createRadialGradient(bossX+bossW/2, bossY+bossH/2, 10, bossX+bossW/2, bossY+bossH/2, 120);
+    aura.addColorStop(0, `rgba(168,85,247,${0.3*bossAlpha})`);
+    aura.addColorStop(0.5, `rgba(255,0,85,${0.12*bossAlpha})`);
+    aura.addColorStop(1, "transparent");
+    cx.fillStyle = aura;
+    cx.fillRect(0, 0, cvs.width, bossAreaH);
 
-    let gx = 0, gy = 0;
-    if (bossGlitch > 0) {
-        gx = (Math.random() - 0.5) * 10;
-        gy = (Math.random() - 0.5) * 6;
+    // Screen flash overlay from boss
+    if(bossScreenFlash > 0) {
+        bossScreenFlash--;
+        cx.fillStyle = `rgba(255,0,85,${bossScreenFlash*0.03})`;
+        cx.fillRect(0, 0, cvs.width, cvs.height);
     }
 
-    const bw = 150, bh = 130;
-    const bx = (canvasEl.width - bw) / 2 + gx;
-    const by = bossDrawY + gy;
+    if(IMG.boss) {
+        cx.drawImage(IMG.boss, bossX, bossY, bossW, bossH);
 
-    // aura
-    const aura = ctx.createRadialGradient(canvasEl.width / 2, by + bh / 2, 15, canvasEl.width / 2, by + bh / 2, 130);
-    aura.addColorStop(0, `rgba(168,85,247,${0.28 * bossAlpha})`);
-    aura.addColorStop(0.6, `rgba(255,0,85,${0.08 * bossAlpha})`);
-    aura.addColorStop(1, "transparent");
-    ctx.fillStyle = aura;
-    ctx.fillRect(0, 0, canvasEl.width, bossAreaH);
-
-    if (IMG.boss) {
-        ctx.drawImage(IMG.boss, bx, by, bw, bh);
-        // glitch scanlines
-        if (bossGlitch > 0 && Math.random() > 0.4) {
-            ctx.globalCompositeOperation = "screen";
-            ctx.fillStyle = "rgba(255,0,85,0.25)";
-            ctx.fillRect(bx - 8, by + Math.random() * bh, bw + 16, 3);
-            ctx.fillStyle = "rgba(0,200,255,0.15)";
-            ctx.fillRect(bx - 4, by + Math.random() * bh, bw + 8, 2);
-            ctx.globalCompositeOperation = "source-over";
+        // glitch scanlines when damaged
+        if(bossScreenFlash > 0 || Math.random() > 0.92) {
+            cx.globalCompositeOperation = "screen";
+            cx.fillStyle = `rgba(255,0,85,${0.15+Math.random()*0.15})`;
+            cx.fillRect(bossX-10, bossY+Math.random()*bossH, bossW+20, 2+Math.random()*3);
+            cx.fillStyle = `rgba(0,200,255,${0.1+Math.random()*0.1})`;
+            cx.fillRect(bossX-5, bossY+Math.random()*bossH, bossW+10, 2);
+            cx.globalCompositeOperation = "source-over";
         }
     } else {
-        // fallback
-        ctx.fillStyle = `rgba(168,85,247,${bossAlpha})`;
-        ctx.shadowColor = "#a855f7";
-        ctx.shadowBlur = 35;
-        ctx.beginPath();
-        ctx.arc(canvasEl.width / 2, by + 55, 45, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = "#ff0055";
-        ctx.beginPath();
-        ctx.arc(canvasEl.width / 2, by + 50, 10, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.font = "bold 9px Orbitron";
-        ctx.fillStyle = "#fff";
-        ctx.textAlign = "center";
-        ctx.fillText("NAMELESS DEITY", canvasEl.width / 2, by + 110);
+        // fallback boss
+        cx.fillStyle = `rgba(168,85,247,${bossAlpha})`;
+        cx.shadowColor = "#a855f7"; cx.shadowBlur = 35;
+        cx.beginPath(); cx.arc(bossX+bossW/2, bossY+bossH/2, 45, 0, Math.PI*2); cx.fill();
+        cx.shadowBlur = 0;
+        cx.fillStyle = "#ff0055";
+        cx.beginPath(); cx.arc(bossX+bossW/2, bossY+bossH/2-5, 10, 0, Math.PI*2); cx.fill();
+        cx.font = "bold 8px Orbitron"; cx.fillStyle = "#fff"; cx.textAlign = "center";
+        cx.fillText("NAMELESS DEITY", bossX+bossW/2, bossY+bossH-5);
     }
 
-    ctx.restore();
+    cx.restore();
 }
 
 // ================================================================
 //  BOSS KILL
 // ================================================================
 function onBossKill() {
-    if (bossWave >= MAX_BOSS_WAVES) {
-        // victory
+    if(bossWave >= MAX_WAVES) {
         phase = "victory";
         flashScreen("heavy");
-        setTimeout(() => {
+        setTimeout(()=>{
             $("#game-screen").classList.remove("active");
             $("#boss-defeat-screen").classList.add("active");
-            const vs = $("#victory-score");
-            if (vs) vs.textContent = score.toString().padStart(4, "0");
-        }, 1800);
+            const vs=$("#victory-score"); if(vs)vs.textContent=score.toString().padStart(4,"0");
+        }, 2000);
     } else {
-        // next wave
         bossWave++;
         bossHp = BOSS_BASE_HP * bossWave;
         syncBossHUD();
-        bossGlitch = 50;
         flashScreen("heavy");
-        autoSwordAcc = 0;
+        bossScreenFlash = 20;
+        mainSwordAcc = 0;
+        divineSwordAcc = 0;
         bossRevengeAcc = 0;
+        bossBombAcc = 0;
+        // Boss gets faster each wave
     }
 }
 
@@ -954,13 +997,12 @@ function onBossKill() {
 //  GAME OVER
 // ================================================================
 function triggerGameOver() {
-    if (phase === "gameover" || phase === "victory") return;
+    if(phase==="gameover"||phase==="victory") return;
     phase = "gameover";
-    setTimeout(() => {
+    setTimeout(()=>{
         $("#game-screen").classList.remove("active");
         $("#game-over-screen").classList.add("active");
-        const fs = $("#final-score");
-        if (fs) fs.textContent = score.toString().padStart(4, "0");
+        const fs=$("#final-score"); if(fs)fs.textContent=score.toString().padStart(4,"0");
     }, 500);
 }
 
@@ -968,241 +1010,163 @@ function triggerGameOver() {
 //  GRID DRAWING
 // ================================================================
 function drawGrid() {
-    for (let y = 0; y < GRID; y++) {
-        for (let x = 0; x < GRID; x++) {
-            const dx = gridOX + x * cellSz;
-            const dy = gridOY + y * cellSz;
-            const val = grid[y][x];
+    const now = performance.now();
+    for(let y=0;y<G;y++){
+        for(let x=0;x<G;x++){
+            const dx=gridOX+x*cellSz, dy=gridOY+y*cellSz;
+            const val=grid[y][x];
 
-            if (val === 0) {
-                // empty
-                ctx.fillStyle = "rgba(255,255,255,0.025)";
-                ctx.beginPath();
-                ctx.roundRect(dx + 1, dy + 1, cellSz - 2, cellSz - 2, 3);
-                ctx.fill();
-            } else if (val === BLOCKED_CELL) {
-                // boss-blocked cell
-                const pulse = 0.3 + Math.sin(performance.now() * 0.008) * 0.2;
-                ctx.fillStyle = `rgba(168,85,247,${pulse})`;
-                ctx.beginPath();
-                ctx.roundRect(dx + 1, dy + 1, cellSz - 2, cellSz - 2, 3);
-                ctx.fill();
+            if(val===0){
+                cx.fillStyle="rgba(255,255,255,0.025)";
+                cx.beginPath(); cx.roundRect(dx+1,dy+1,cellSz-2,cellSz-2,3); cx.fill();
+            } else if(val===BLOCKED){
+                const pulse = 0.3+Math.sin(now*0.008)*0.2;
+                cx.fillStyle=`rgba(168,85,247,${pulse})`;
+                cx.beginPath(); cx.roundRect(dx+1,dy+1,cellSz-2,cellSz-2,3); cx.fill();
 
-                // X mark
-                ctx.strokeStyle = `rgba(255,0,85,${pulse + 0.25})`;
-                ctx.lineWidth = 2.5;
-                ctx.lineCap = "round";
-                const m = 7;
-                ctx.beginPath();
-                ctx.moveTo(dx + m, dy + m);
-                ctx.lineTo(dx + cellSz - m, dy + cellSz - m);
-                ctx.moveTo(dx + cellSz - m, dy + m);
-                ctx.lineTo(dx + m, dy + cellSz - m);
-                ctx.stroke();
+                cx.strokeStyle=`rgba(255,0,85,${pulse+0.25})`;
+                cx.lineWidth=2.5; cx.lineCap="round";
+                const m=7;
+                cx.beginPath();
+                cx.moveTo(dx+m,dy+m); cx.lineTo(dx+cellSz-m,dy+cellSz-m);
+                cx.moveTo(dx+cellSz-m,dy+m); cx.lineTo(dx+m,dy+cellSz-m);
+                cx.stroke();
 
-                // pulsing border
-                ctx.strokeStyle = `rgba(168,85,247,${pulse * 0.6})`;
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.roundRect(dx + 1, dy + 1, cellSz - 2, cellSz - 2, 3);
-                ctx.stroke();
+                cx.strokeStyle=`rgba(168,85,247,${pulse*0.6})`;
+                cx.lineWidth=1;
+                cx.beginPath(); cx.roundRect(dx+1,dy+1,cellSz-2,cellSz-2,3); cx.stroke();
             } else {
-                // filled cell
-                const clr = typeof val === "string" ? val : "#ff0055";
-
-                ctx.fillStyle = "rgba(0,0,0,0.25)";
-                ctx.beginPath();
-                ctx.roundRect(dx + 3, dy + 3, cellSz - 4, cellSz - 4, 4);
-                ctx.fill();
-
-                ctx.fillStyle = clr;
-                ctx.shadowColor = clr;
-                ctx.shadowBlur = 7;
-                ctx.beginPath();
-                ctx.roundRect(dx + 2, dy + 2, cellSz - 4, cellSz - 4, 4);
-                ctx.fill();
-                ctx.shadowBlur = 0;
-
-                ctx.fillStyle = "rgba(255,255,255,0.18)";
-                ctx.fillRect(dx + 4, dy + 3, cellSz - 8, 2);
-                ctx.fillStyle = "rgba(0,0,0,0.12)";
-                ctx.fillRect(dx + 4, dy + cellSz - 6, cellSz - 8, 2);
+                const clr = typeof val==="string"?val:"#ff0055";
+                cx.fillStyle="rgba(0,0,0,0.25)";
+                cx.beginPath(); cx.roundRect(dx+3,dy+3,cellSz-4,cellSz-4,4); cx.fill();
+                cx.fillStyle=clr; cx.shadowColor=clr; cx.shadowBlur=7;
+                cx.beginPath(); cx.roundRect(dx+2,dy+2,cellSz-4,cellSz-4,4); cx.fill();
+                cx.shadowBlur=0;
+                cx.fillStyle="rgba(255,255,255,0.18)";
+                cx.fillRect(dx+4,dy+3,cellSz-8,2);
+                cx.fillStyle="rgba(0,0,0,0.12)";
+                cx.fillRect(dx+4,dy+cellSz-6,cellSz-8,2);
             }
 
-            // grid line
-            ctx.strokeStyle = "rgba(255,255,255,0.04)";
-            ctx.lineWidth = 0.5;
-            ctx.strokeRect(dx, dy, cellSz, cellSz);
+            cx.strokeStyle="rgba(255,255,255,0.04)"; cx.lineWidth=0.5;
+            cx.strokeRect(dx,dy,cellSz,cellSz);
         }
     }
-
-    // outer border
-    ctx.strokeStyle = "rgba(255,255,255,0.08)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.roundRect(gridOX - 1, gridOY - 1, GRID * cellSz + 2, GRID * cellSz + 2, 5);
-    ctx.stroke();
+    cx.strokeStyle="rgba(255,255,255,0.08)"; cx.lineWidth=1;
+    cx.beginPath(); cx.roundRect(gridOX-1,gridOY-1,G*cellSz+2,G*cellSz+2,5); cx.stroke();
 }
 
 // ================================================================
-//  GHOST PREVIEW
+//  GHOST + DRAG DRAWING
 // ================================================================
 function drawGhost() {
-    if (!drag || !drag.valid) return;
-    const cs = drag.cells;
-
-    cs.forEach((row, r) => row.forEach((v, c) => {
-        if (!v) return;
-        const dx = gridOX + (drag.gx + c) * cellSz;
-        const dy = gridOY + (drag.gy + r) * cellSz;
-
-        ctx.fillStyle = "rgba(255,255,255,0.12)";
-        ctx.beginPath();
-        ctx.roundRect(dx + 2, dy + 2, cellSz - 4, cellSz - 4, 4);
-        ctx.fill();
-
-        ctx.strokeStyle = "rgba(255,255,255,0.35)";
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.roundRect(dx + 2, dy + 2, cellSz - 4, cellSz - 4, 4);
-        ctx.stroke();
+    if(!drag||!drag.valid) return;
+    drag.cells.forEach((row,r)=>row.forEach((v,c)=>{
+        if(!v)return;
+        const dx=gridOX+(drag.gx+c)*cellSz, dy=gridOY+(drag.gy+r)*cellSz;
+        cx.fillStyle="rgba(255,255,255,0.12)";
+        cx.beginPath(); cx.roundRect(dx+2,dy+2,cellSz-4,cellSz-4,4); cx.fill();
+        cx.strokeStyle="rgba(255,255,255,0.35)"; cx.lineWidth=1.5;
+        cx.beginPath(); cx.roundRect(dx+2,dy+2,cellSz-4,cellSz-4,4); cx.stroke();
     }));
 }
 
-// ================================================================
-//  DRAGGED PIECE DRAWING
-// ================================================================
 function drawDragged() {
-    if (!drag) return;
-
-    drag.cells.forEach((row, r) => row.forEach((v, c) => {
-        if (!v) return;
-        const px = drag.px + c * cellSz;
-        const py = drag.py + r * cellSz;
-
-        ctx.globalAlpha = 0.82;
-        ctx.fillStyle = drag.color;
-        ctx.shadowColor = drag.color;
-        ctx.shadowBlur = 10;
-        ctx.beginPath();
-        ctx.roundRect(px + 2, py + 2, cellSz - 4, cellSz - 4, 4);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.globalAlpha = 1;
-
-        ctx.fillStyle = "rgba(255,255,255,0.28)";
-        ctx.fillRect(px + 4, py + 3, cellSz - 8, 2);
+    if(!drag) return;
+    drag.cells.forEach((row,r)=>row.forEach((v,c)=>{
+        if(!v)return;
+        const px=drag.px+c*cellSz, py=drag.py+r*cellSz;
+        cx.globalAlpha=0.82; cx.fillStyle=drag.color;
+        cx.shadowColor=drag.color; cx.shadowBlur=10;
+        cx.beginPath(); cx.roundRect(px+2,py+2,cellSz-4,cellSz-4,4); cx.fill();
+        cx.shadowBlur=0; cx.globalAlpha=1;
+        cx.fillStyle="rgba(255,255,255,0.28)";
+        cx.fillRect(px+4,py+3,cellSz-8,2);
     }));
 }
 
 // ================================================================
-//  INPUT: DRAG & DROP
+//  INPUT
 // ================================================================
-function canvasCoords(cx, cy) {
-    const r = canvasEl.getBoundingClientRect();
-    return { x: (cx - r.left) / cScale, y: (cy - r.top) / cScale };
+function cvsCoords(clientX, clientY) {
+    const r=cvs.getBoundingClientRect();
+    return { x:(clientX-r.left)/cScale, y:(clientY-r.top)/cScale };
 }
 
-function onDragStart(e) {
-    if (phase !== "normal" && phase !== "boss") return;
-    const slotEl = e.target.closest(".slot");
-    if (!slotEl) return;
-    const idx = parseInt(slotEl.dataset.slot);
-    if (isNaN(idx) || !slots[idx] || slots[idx].used) return;
+function onStart(e) {
+    if(phase!=="normal"&&phase!=="boss") return;
+    const el=e.target.closest(".slot"); if(!el)return;
+    const idx=parseInt(el.dataset.slot);
+    if(isNaN(idx)||!slots[idx]||slots[idx].used) return;
+    e.preventDefault(); dragging=true;
 
+    const t=e.touches?e.touches[0]:e;
+    const co=cvsCoords(t.clientX,t.clientY);
+    const s=slots[idx];
+    const pw=s.cells[0].length*cellSz, ph=s.cells.length*cellSz;
+
+    drag={cells:s.cells,color:s.color,
+        px:co.x-pw/2, py:co.y-ph/2-DRAG_OFFSET,
+        gx:-1,gy:-1,valid:false,slotIdx:idx};
+
+    el.classList.add("dragging");
+}
+
+function onMove(e) {
+    if(!dragging||!drag) return;
     e.preventDefault();
-    dragging = true;
+    const t=e.touches?e.touches[0]:e;
+    const co=cvsCoords(t.clientX,t.clientY);
+    const pw=drag.cells[0].length*cellSz, ph=drag.cells.length*cellSz;
+    drag.px=co.x-pw/2;
+    drag.py=co.y-ph/2-DRAG_OFFSET;
 
-    const touch = e.touches ? e.touches[0] : e;
-    const co = canvasCoords(touch.clientX, touch.clientY);
-    const s = slots[idx];
-    const pw = s.cells[0].length * cellSz;
-    const ph = s.cells.length * cellSz;
-
-    drag = {
-        cells: s.cells,
-        color: s.color,
-        px: co.x - pw / 2,
-        py: co.y - ph / 2 - DRAG_ABOVE_PX,
-        gx: -1, gy: -1,
-        valid: false,
-        slotIdx: idx,
-    };
-
-    slotEl.classList.add("dragging");
+    const centerX=drag.px+pw/2, centerY=drag.py+ph/2;
+    const gx=Math.round((centerX-gridOX-pw/2)/cellSz);
+    const gy=Math.round((centerY-gridOY-ph/2)/cellSz);
+    drag.gx=gx; drag.gy=gy;
+    drag.valid=canPlace(drag.cells,gx,gy);
 }
 
-function onDragMove(e) {
-    if (!dragging || !drag) return;
-    e.preventDefault();
+function onEnd() {
+    if(!dragging||!drag) return;
+    const els=$$(".slot"), idx=drag.slotIdx;
 
-    const touch = e.touches ? e.touches[0] : e;
-    const co = canvasCoords(touch.clientX, touch.clientY);
-
-    const pw = drag.cells[0].length * cellSz;
-    const ph = drag.cells.length * cellSz;
-
-    drag.px = co.x - pw / 2;
-    drag.py = co.y - ph / 2 - DRAG_ABOVE_PX;
-
-    // snap calc
-    const cx = drag.px + pw / 2;
-    const cy = drag.py + ph / 2;
-    const gx = Math.round((cx - gridOX - pw / 2) / cellSz);
-    const gy = Math.round((cy - gridOY - ph / 2) / cellSz);
-
-    drag.gx = gx;
-    drag.gy = gy;
-    drag.valid = canPlace(drag.cells, gx, gy);
-}
-
-function onDragEnd() {
-    if (!dragging || !drag) return;
-
-    const slotElems = $$(".slot");
-    const idx = drag.slotIdx;
-
-    if (drag.valid) {
+    if(drag.valid) {
         placeOnGrid(drag.cells, drag.color, drag.gx, drag.gy);
         slots[idx].used = true;
-        slotElems[idx].classList.remove("dragging");
-        slotElems[idx].classList.add("used");
+        els[idx].classList.remove("dragging");
+        els[idx].classList.add("used");
 
         clearLines();
         score += 10;
-        updateScoreUI();
+        updateScore();
 
-        // ascension check
-        if (score >= ASCENSION_SCORE && phase === "normal") {
+        if(score>=ASCEND_SCORE && phase==="normal"){
+            drag=null; dragging=false;
             ascend();
-            drag = null;
-            dragging = false;
             return;
         }
 
-        if (allSlotsUsed()) {
-            setTimeout(fillSlots, 180);
+        if(allUsed()){
+            setTimeout(fillSlots,180);
         } else {
-            setTimeout(() => {
-                if (!anyMoveExists()) triggerGameOver();
-            }, 80);
+            setTimeout(()=>{ if(!anyMove()) triggerGameOver(); }, 80);
         }
     } else {
-        slotElems[idx].classList.remove("dragging");
+        els[idx].classList.remove("dragging");
     }
-
-    drag = null;
-    dragging = false;
+    drag=null; dragging=false;
 }
 
 // ================================================================
-//  AUTO-SWORD TIMER UI
+//  TIMER UI
 // ================================================================
-function updateAutoSwordTimerUI() {
-    const fill = $("#auto-sword-fill");
-    if (!fill) return;
-    const pct = Math.min(100, (autoSwordAcc / AUTO_SWORD_INTERVAL) * 100);
-    fill.style.width = pct + "%";
+function updateTimerUI() {
+    const mf=$("#main-sword-fill");
+    const df=$("#divine-sword-fill");
+    if(mf) mf.style.width=Math.min(100,(mainSwordAcc/MAIN_SWORD_CD)*100)+"%";
+    if(df) df.style.width=Math.min(100,(divineSwordAcc/DIVINE_SWORD_CD)*100)+"%";
 }
 
 // ================================================================
@@ -1210,187 +1174,161 @@ function updateAutoSwordTimerUI() {
 // ================================================================
 function loop(ts) {
     requestAnimationFrame(loop);
+    const dt = lastTs ? Math.min(ts-lastTs, 50) : 16;
+    lastTs = ts;
 
-    const dt = lastFrameTs ? (ts - lastFrameTs) : 16;
-    lastFrameTs = ts;
+    // ---- UPDATES ----
 
-    // ---------- UPDATES ----------
-    if (phase === "boss") {
-        // auto sword timer
-        autoSwordAcc += dt;
-        if (autoSwordAcc >= AUTO_SWORD_INTERVAL) {
-            autoSwordAcc = 0;
-            spawnAutoSword();
+    // Main sword timer (both phases)
+    if(phase==="normal"||phase==="boss") {
+        mainSwordAcc += dt;
+        if(mainSwordAcc >= MAIN_SWORD_CD) {
+            mainSwordAcc = 0;
+            spawnMainSword();
         }
-        updateAutoSwordTimerUI();
+    }
 
-        // boss revenge timer
+    // Boss-specific timers
+    if(phase==="boss") {
+        divineSwordAcc += dt;
+        if(divineSwordAcc >= DIVINE_SWORD_CD) {
+            divineSwordAcc = 0;
+            spawnDivineSword();
+        }
+
+        bossFlashAcc += dt;
+        if(bossFlashAcc >= BOSS_FLASH_CD) {
+            bossFlashAcc = 0;
+            bossFlash();
+        }
+
         bossRevengeAcc += dt;
-        if (bossRevengeAcc >= BOSS_REVENGE_INTERVAL) {
+        if(bossRevengeAcc >= BOSS_REVENGE_CD) {
             bossRevengeAcc = 0;
             bossBlockCells();
         }
 
-        // boss glitch countdown
-        if (bossGlitch > 0) bossGlitch--;
+        bossBombAcc += dt;
+        if(bossBombAcc >= BOSS_BOMB_CD) {
+            bossBombAcc = 0;
+            spawnBossBombs();
+        }
+
+        updateBossMovement(dt);
+        updateTimerUI();
     }
 
     updateMainSwords();
-    updateAutoSwords();
+    updateDivineSwords();
+    updateBossBombs(dt);
     updateParticles();
 
     const sk = getShake();
 
-    // ---------- DRAW ----------
-    if (phase === "boss" || phase === "ascending" || phase === "victory") {
+    // ---- DRAW ----
+    if(phase==="boss"||phase==="ascending"||phase==="victory") {
         drawCosmos();
     }
 
-    ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+    cx.clearRect(0,0,cvs.width,cvs.height);
+    cx.save();
+    cx.translate(sk.x,sk.y);
 
-    ctx.save();
-    ctx.translate(sk.x, sk.y);
-
-    // subtle canvas bg
-    ctx.fillStyle = "rgba(5,8,17,0.2)";
-    ctx.fillRect(0, 0, canvasEl.width, canvasEl.height);
+    cx.fillStyle="rgba(5,8,17,0.2)";
+    cx.fillRect(0,0,cvs.width,cvs.height);
 
     drawBoss();
     drawGrid();
     drawGhost();
     drawDragged();
     drawMainSwords();
-    drawAutoSwords();
+    drawDivineSwords();
+    drawBossBombs();
     drawParticles();
 
-    ctx.restore();
+    cx.restore();
 }
 
 // ================================================================
-//  GAME INIT / RESET
+//  GAME START / RESET
 // ================================================================
-function startNewGame() {
-    score = 0;
-    bossHp = BOSS_BASE_HP;
-    bossWave = 1;
-    bossAlpha = 0;
-    bossDrawY = -200;
-    bossGlitch = 0;
-    autoSwordAcc = 0;
-    bossRevengeAcc = 0;
-    phase = "normal";
+function startGame() {
+    score=0; bossHp=BOSS_BASE_HP; bossWave=1; bossAlpha=0;
+    bossX=0; bossY=0;
+    mainSwordAcc=0; divineSwordAcc=0; bossFlashAcc=0;
+    bossRevengeAcc=0; bossBombAcc=0;
+    phase="normal";
+    blockedCells=[]; mainSwords=[]; divineSwords=[];
+    bossBombs=[]; impactFX=[]; breakFX=[]; lineFX=[];
+    shakeAmt=0; shakeDur=0; bossScreenFlash=0;
+    drag=null; dragging=false;
 
-    blockedList = [];
-    swords = [];
-    autoSwords = [];
-    impactParticles = [];
-    breakParticles = [];
-    lineFX = [];
-    shakeAmt = 0;
-    shakeDur = 0;
-    drag = null;
-    dragging = false;
+    resetGrid(); updateScore(); hideBossHUD(); sizeCanvas(); fillSlots();
 
-    resetGrid();
-    updateScoreUI();
-    hideBossHUD();
-    sizeCanvas();
-    fillSlots();
-
-    // reset backgrounds
-    const bg = $("#bg-layer");
-    if (bg) bg.style.opacity = "1";
-    const cos = $("#cosmic-bg");
-    if (cos) { cos.classList.add("hidden"); cos.classList.remove("visible"); }
-
-    // reset game-ui-container
-    const gc = $("#game-ui-container");
-    if (gc) gc.classList.remove("float-away");
-
-    // reset ascension overlay
-    const ao = $("#ascension-overlay");
-    if (ao) { ao.classList.remove("visible"); ao.classList.remove("hidden-done"); }
-
-    // reset auto sword timer
-    const af = $("#auto-sword-fill");
-    if (af) af.style.width = "0%";
+    const bg=$("#bg-layer"); if(bg)bg.style.opacity="1";
+    const cos=$("#cosmic-bg"); if(cos){cos.classList.add("hidden");cos.classList.remove("visible");}
+    const gc=$("#game-ui-container"); if(gc)gc.classList.remove("float-away");
+    const ao=$("#ascension-overlay"); if(ao)ao.classList.remove("visible");
+    const af=$("#main-sword-fill"); if(af)af.style.width="0%";
+    const df=$("#divine-sword-fill"); if(df)df.style.width="0%";
 }
 
-function returnToMenu() {
-    $$(".screen").forEach(s => s.classList.remove("active"));
+function toMenu() {
+    $$(".screen").forEach(s=>s.classList.remove("active"));
     $("#main-menu").classList.add("active");
-
-    const bg = $("#bg-layer");
-    if (bg) bg.style.opacity = "1";
-    const cos = $("#cosmic-bg");
-    if (cos) { cos.classList.add("hidden"); cos.classList.remove("visible"); }
+    const bg=$("#bg-layer"); if(bg)bg.style.opacity="1";
+    const cos=$("#cosmic-bg"); if(cos){cos.classList.add("hidden");cos.classList.remove("visible");}
     hideBossHUD();
-
-    const gc = $("#game-ui-container");
-    if (gc) gc.classList.remove("float-away");
-    const ao = $("#ascension-overlay");
-    if (ao) { ao.classList.remove("visible"); }
-
-    phase = "menu";
+    const gc=$("#game-ui-container"); if(gc)gc.classList.remove("float-away");
+    const ao=$("#ascension-overlay"); if(ao)ao.classList.remove("visible");
+    phase="menu";
 }
 
 // ================================================================
-//  EVENT BINDINGS
+//  EVENTS
 // ================================================================
-let loopStarted = false;
+let loopOn=false;
 
-$("#start-btn").addEventListener("click", () => {
+$("#start-btn").addEventListener("click",()=>{
     $("#main-menu").classList.remove("active");
     $("#game-screen").classList.add("active");
-    startNewGame();
-    if (!loopStarted) {
-        loopStarted = true;
-        requestAnimationFrame(loop);
-    }
+    startGame();
+    if(!loopOn){loopOn=true; requestAnimationFrame(loop);}
 });
 
-$("#retry-btn").addEventListener("click", () => {
+$("#retry-btn").addEventListener("click",()=>{
     $("#game-over-screen").classList.remove("active");
     $("#game-screen").classList.add("active");
-    startNewGame();
+    startGame();
 });
 
-$("#menu-btn").addEventListener("click", () => {
+$("#menu-btn").addEventListener("click",()=>{
     $("#game-over-screen").classList.remove("active");
-    returnToMenu();
+    toMenu();
 });
 
-$("#victory-menu-btn").addEventListener("click", () => {
+$("#victory-menu-btn").addEventListener("click",()=>{
     $("#boss-defeat-screen").classList.remove("active");
-    returnToMenu();
+    toMenu();
 });
 
-// --- Touch ---
-const hotbar = $("#hotbar");
-hotbar.addEventListener("touchstart", onDragStart, { passive: false });
-document.addEventListener("touchmove", onDragMove, { passive: false });
-document.addEventListener("touchend", onDragEnd, { passive: false });
-document.addEventListener("touchcancel", onDragEnd, { passive: false });
+const hotbar=$("#hotbar");
+hotbar.addEventListener("touchstart",onStart,{passive:false});
+document.addEventListener("touchmove",onMove,{passive:false});
+document.addEventListener("touchend",onEnd,{passive:false});
+document.addEventListener("touchcancel",onEnd,{passive:false});
 
-// --- Mouse ---
-hotbar.addEventListener("mousedown", onDragStart);
-document.addEventListener("mousemove", (e) => { if (dragging) onDragMove(e); });
-document.addEventListener("mouseup", onDragEnd);
+hotbar.addEventListener("mousedown",onStart);
+document.addEventListener("mousemove",e=>{if(dragging)onMove(e);});
+document.addEventListener("mouseup",onEnd);
 
-// --- Resize ---
-let rsTimer;
-window.addEventListener("resize", () => {
-    clearTimeout(rsTimer);
-    rsTimer = setTimeout(sizeCanvas, 120);
-});
+let rsT;
+window.addEventListener("resize",()=>{clearTimeout(rsT);rsT=setTimeout(sizeCanvas,120);});
 
-// --- Prevent scroll / context ---
-document.addEventListener("contextmenu", (e) => e.preventDefault());
-document.body.addEventListener("touchmove", (e) => {
-    if (dragging) e.preventDefault();
-}, { passive: false });
+document.addEventListener("contextmenu",e=>e.preventDefault());
+document.body.addEventListener("touchmove",e=>{if(dragging)e.preventDefault();},{passive:false});
 
 // ================================================================
 //  BOOT
 // ================================================================
-loadAllAssets();
+loadAssets();
