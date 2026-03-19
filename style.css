@@ -6,12 +6,13 @@
     -webkit-user-select: none;
     user-select: none;
     outline: none;
+    touch-action: none; /* Убираем зум на мобилах */
 }
 
 body {
     background-color: #000;
     color: #fff;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: 'Courier New', Courier, monospace; /* Более техничный шрифт */
     overflow: hidden;
     width: 100vw;
     height: 100vh;
@@ -26,14 +27,15 @@ body {
     overflow: hidden;
 }
 
-/* Ограничиваем игровое поле вертикально */
 #screen-wrapper {
     position: relative;
     width: 100%;
-    max-width: 480px; /* Размер как у телефона */
+    max-width: 480px; /* Вертикальный экран */
     height: 100%;
-    background-color: #000;
+    background-color: #0a0a0a;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .screen {
@@ -43,52 +45,53 @@ body {
     width: 100%;
     height: 100%;
     display: none;
+    opacity: 0;
     flex-direction: column;
-    justify-content: center;
+    justify-content: space-between;
     align-items: center;
     z-index: 10;
 }
 
 .screen.active {
     display: flex;
+    animation: fadeIn 0.5s forwards;
 }
 
 /* Прелоадер */
 #preloader {
-    background-color: #0a0a0a;
+    background-color: #000;
     color: #ff0055;
     z-index: 100;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 .loader {
-    font-size: 24px;
-    font-weight: bold;
-    animation: pulse 1s infinite;
-}
-
-@keyframes pulse {
-    0% { opacity: 1; }
-    50% { opacity: 0.5; }
-    100% { opacity: 1; }
+    font-size: 32px;
+    font-weight: 900;
+    animation: pulse 0.5s infinite;
+    text-shadow: 0 0 10px #ff0055;
 }
 
 /* Главное меню */
 #main-menu {
     z-index: 20;
-    opacity: 0;
+    justify-content: center;
 }
 
 #main-menu h1 {
-    font-size: 32px;
+    font-size: 36px;
     text-align: center;
-    margin-bottom: 50px;
+    margin-bottom: 80px;
     text-transform: uppercase;
     letter-spacing: 2px;
+    color: #fff;
     text-shadow: 0 0 10px rgba(255, 0, 85, 0.5);
 }
 
 .hardcore {
     color: #ff0055;
-    font-size: 40px;
+    font-size: 48px;
     font-weight: 900;
     text-shadow: 0 0 15px rgba(255, 0, 85, 0.8);
 }
@@ -96,23 +99,23 @@ body {
 /* Кнопки на основе текстур */
 .ui-button {
     background-image: url('ui-button.png');
-    background-size: cover;
+    background-size: 100% 100%;
     background-position: center;
     background-color: transparent;
     border: none;
     width: 250px;
-    height: 60px;
+    height: 70px;
     cursor: pointer;
     display: flex;
     justify-content: center;
     align-items: center;
     color: #fff;
-    font-size: 20px;
+    font-size: 24px;
     font-weight: bold;
     text-transform: uppercase;
-    transition: transform 0.2s;
     position: relative;
     outline: none;
+    transition: transform 0.1s;
 }
 
 .ui-button span {
@@ -120,22 +123,22 @@ body {
 }
 
 .ui-button:hover {
-    transform: scale(1.05);
     background-image: url('ui-button-active.png');
+    transform: scale(1.03);
 }
 
 .ui-button:active {
-    transform: scale(0.95);
+    transform: scale(0.97);
 }
 
-/* Анимированный мрачный фон меню */
+/* Фон меню в стиле Limbo */
 .background-overlay {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: linear-gradient(0deg, #0a0a0a 0%, #1a001a 100%);
+    background: radial-gradient(circle, #2a002a 0%, #000 70%);
     z-index: -1;
     opacity: 0.5;
 }
@@ -143,22 +146,64 @@ body {
 /* Игровой экран */
 #game-screen {
     z-index: 15;
-    opacity: 0;
+}
+
+#hud {
+    width: 100%;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
 #score-display {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    font-size: 24px;
+    font-size: 28px;
     font-weight: bold;
     color: #ff0055;
+    text-align: right;
     text-shadow: 0 0 10px rgba(255, 0, 85, 0.5);
+}
+
+#timer-bar {
+    position: relative;
+    width: 100%;
+    height: 25px;
+    background-color: #222;
+    border: 2px solid #ff0055;
+    box-shadow: 0 0 10px rgba(255, 0, 85, 0.3);
+}
+
+#timer-fill {
+    height: 100%;
+    width: 100%;
+    background-color: #ff0055;
+    transition: width 0.1s linear;
+}
+
+#timer-bar span {
+    position: absolute;
+    top: 0;
+    left: 10px;
+    line-height: 22px;
+    font-size: 14px;
+    font-weight: bold;
+    color: #000;
+}
+
+#canvas-wrapper {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    max-height: 480px; /* Поле должно быть квадратным */
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 #game-canvas {
     display: block;
-    border: 2px solid #222;
+    background-color: #050505;
+    border: 2px solid #333;
 }
 
 #vfx-canvas {
@@ -168,6 +213,35 @@ body {
     width: 100%;
     height: 100%;
     pointer-events: none;
+}
+
+/* ХОТБАР с фигурами */
+#hotbar {
+    width: 100%;
+    height: 130px;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    background-color: #111;
+    border-top: 2px solid #333;
+    padding: 10px;
+    margin-top: auto;
+}
+
+.figure-slot {
+    width: 100px;
+    height: 100px;
+    position: relative;
+}
+
+/* Обычный канвас для фигурки */
+.figure-slot canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    cursor: grab;
 }
 
 /* Финальный экран */
@@ -194,7 +268,7 @@ body {
     pointer-events: none;
 }
 
-/* Анимации затемнения и вспышек */
+/* Эффекты: Затемнение, Вспышки, Тряска */
 @keyframes fadeIn {
     to { opacity: 1; }
 }
@@ -208,11 +282,10 @@ body {
     100% { opacity: 0; }
 }
 
-.white-flash {
+.white-flash-css {
     animation: whiteFlash 0.5s forwards;
 }
 
-/* Тряска экрана */
 @keyframes shake {
     0% { transform: translate(1px, 1px); }
     10% { transform: translate(-1px, -2px); }
@@ -227,6 +300,6 @@ body {
     100% { transform: translate(1px, -2px); }
 }
 
-.screen-shake {
+.screen-shake-css {
     animation: shake 0.5s;
 }
