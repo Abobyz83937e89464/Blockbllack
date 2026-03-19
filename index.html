@@ -4,38 +4,54 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Block Blast Neo Edition</title>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="bg">
+    <div class="bg" id="bg-layer">
         <div class="blob"></div>
         <div class="blob"></div>
     </div>
+
+    <div id="cosmic-bg" class="cosmic-bg hidden">
+        <canvas id="cosmic-canvas"></canvas>
+    </div>
+
+    <div id="white-flash" class="white-flash"></div>
 
     <div id="ui-layer">
         <div id="preloader">
             <div class="loader-box">
                 <div class="loader-title">NEO SYSTEM BOOT</div>
                 <div class="progress-container"><div id="progress-bar"></div></div>
-                <div class="status-text">INITIALIZING...</div>
+                <div class="status-text" id="status-text">INITIALIZING...</div>
             </div>
         </div>
 
         <div id="main-menu" class="screen active">
             <h1 class="logo">BLOCK BLAST<br><span class="neon">HARDCORE</span></h1>
+            <div class="subtitle">CALAMITY EDITION</div>
             <div class="menu-actions">
-                <button id="start-btn" class="neo-btn">START SESSION</button>
-                <button class="neo-btn secondary">CONFIG</button>
+                <button id="start-btn" class="neo-btn pulse">START SESSION</button>
+                <button id="config-btn" class="neo-btn secondary">CONFIG</button>
             </div>
         </div>
 
         <div id="game-screen" class="screen">
             <div id="hud">
-                <div class="score-box">SCORE: <span id="score">0000</span></div>
-                <div class="timer-wrap"><div id="timer-fill"></div></div>
+                <div class="hud-row">
+                    <div class="score-box">SCORE: <span id="score">0000</span></div>
+                    <button id="pause-btn" class="hud-btn">⏸</button>
+                </div>
+                <div id="boss-hud" class="boss-hud hidden">
+                    <div class="boss-name">NAMELESS DEITY</div>
+                    <div class="boss-hp-container">
+                        <div id="boss-hp-bar" class="boss-hp-bar"></div>
+                        <div id="boss-hp-text" class="boss-hp-text">5000 / 5000</div>
+                    </div>
+                </div>
             </div>
-            
+
             <div id="canvas-wrapper">
                 <canvas id="game-canvas"></canvas>
             </div>
@@ -46,7 +62,27 @@
                 <div class="slot" data-slot="2"></div>
             </div>
         </div>
+
+        <div id="game-over-screen" class="screen">
+            <div class="game-over-box">
+                <h1 class="game-over-title">DIVINE<br>RETRIBUTION</h1>
+                <div class="game-over-score">SCORE: <span id="final-score">0000</span></div>
+                <div class="game-over-sub">The Nameless Deity has judged you unworthy.</div>
+                <button id="retry-btn" class="neo-btn pulse">RETRY</button>
+                <button id="menu-btn" class="neo-btn secondary">MAIN MENU</button>
+            </div>
+        </div>
+
+        <div id="boss-defeat-screen" class="screen">
+            <div class="game-over-box victory">
+                <h1 class="game-over-title victory-title">DEITY<br>VANQUISHED</h1>
+                <div class="game-over-score">FINAL SCORE: <span id="victory-score">0000</span></div>
+                <div class="game-over-sub">You have transcended mortality.</div>
+                <button id="victory-menu-btn" class="neo-btn pulse">ASCEND</button>
+            </div>
+        </div>
     </div>
+
     <script src="game.js"></script>
 </body>
 </html>
