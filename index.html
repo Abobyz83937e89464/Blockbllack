@@ -2,50 +2,57 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, touch-action=none">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Block Blast HARDCORE</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
+    <div class="bg">
+        <div class="blob"></div>
+        <div class="blob"></div>
+    </div>
+
     <div id="game-container">
-        <div id="screen-wrapper">
-            <div id="preloader" class="active">
-                <div class="loader">LOAD...</div>
+        <div id="preloader" class="active">
+            <div class="loader-content">
+                <div class="spinner"></div>
+                <p>SYNCING ASSETS...</p>
             </div>
+        </div>
 
-            <div id="main-menu" class="screen">
-                <div class="background-overlay"></div>
+        <div id="main-menu" class="screen">
+            <div class="menu-content">
                 <h1>BLOCK BLAST<br><span class="hardcore">HARDCORE</span></h1>
-                <button id="start-btn" class="ui-button">
-                    <span>НАЧАТЬ</span>
-                </button>
+                
+                <div id="start-btn" class="neo-button">
+                    <span class="btn-text">INITIALIZE SYSTEM</span>
+                    <div class="btn-glow"></div>
+                </div>
             </div>
+        </div>
 
-            <div id="game-screen" class="screen">
-                <div id="hud">
-                    <div id="score-display">СЧЕТ: 0</div>
-                    <div id="timer-bar">
-                        <div id="timer-fill"></div>
-                        <span>МЕЧ: <span id="time-left">20s</span></span>
-                    </div>
-                </div>
-                <div id="canvas-wrapper">
-                    <canvas id="game-canvas"></canvas>
-                    <canvas id="vfx-canvas"></canvas>
-                </div>
-                <div id="hotbar">
-                    <div class="figure-slot" data-slot="0"></div>
-                    <div class="figure-slot" data-slot="1"></div>
-                    <div class="figure-slot" data-slot="2"></div>
+        <div id="game-screen" class="screen">
+            <div id="hud">
+                <div id="score-display">SCORE: 0000</div>
+                <div id="timer-bar">
+                    <div id="timer-fill"></div>
                 </div>
             </div>
 
-            <div id="final-screen" class="screen">
-                <div class="white-overlay"></div>
-                <canvas id="final-canvas"></canvas>
+            <div id="canvas-wrapper">
+                <canvas id="game-canvas"></canvas>
+            </div>
+
+            <div id="hotbar">
+                <div class="figure-slot" data-slot="0"></div>
+                <div class="figure-slot" data-slot="1"></div>
+                <div class="figure-slot" data-slot="2"></div>
             </div>
         </div>
     </div>
+
     <script src="game.js"></script>
 </body>
 </html>
