@@ -28,8 +28,8 @@
             <div class="loader-box">
                 <div class="loader-title">NEO SYSTEM BOOT</div>
                 <div class="progress-container"><div id="progress-bar"></div></div>
-                <div class="status-text" id="status-text">INITIALIZING SUBSYSTEMS...</div>
-                <div class="asset-list" id="asset-list"></div>
+                <div id="status-text" class="status-text">INITIALIZING...</div>
+                <div id="asset-list" class="asset-list"></div>
             </div>
         </div>
 
@@ -47,9 +47,13 @@
                     <div class="hud-row">
                         <div class="score-box">SCORE: <span id="score">0000</span></div>
                         <div id="auto-sword-timer-box" class="timer-box hidden">
-                            <div class="timer-label">DIVINE STRIKE</div>
-                            <div class="timer-bar-container">
-                                <div id="auto-sword-fill" class="timer-bar-fill"></div>
+                            <div class="timer-label">MAIN SWORD</div>
+                            <div class="timer-bar-wrap">
+                                <div id="main-sword-fill" class="timer-fill main"></div>
+                            </div>
+                            <div class="timer-label divine">DIVINE SWORD</div>
+                            <div class="timer-bar-wrap">
+                                <div id="divine-sword-fill" class="timer-fill divine"></div>
                             </div>
                         </div>
                     </div>
@@ -91,7 +95,7 @@
                 <div class="go-icon">👑</div>
                 <h1 class="game-over-title victory-title">DEITY<br>VANQUISHED</h1>
                 <div class="game-over-score">FINAL SCORE: <span id="victory-score">0000</span></div>
-                <div class="game-over-sub">You have transcended mortality itself.</div>
+                <div class="game-over-sub">You have transcended mortality.</div>
                 <button id="victory-menu-btn" class="neo-btn pulse">ASCEND</button>
             </div>
         </div>
