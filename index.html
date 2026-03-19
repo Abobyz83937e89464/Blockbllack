@@ -3,56 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Block Blast HARDCORE</title>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;900&display=swap" rel="stylesheet">
+    <title>Block Blast Neo Edition</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
     <div class="bg">
         <div class="blob"></div>
         <div class="blob"></div>
     </div>
 
-    <div id="game-container">
-        <div id="preloader" class="active">
-            <div class="loader-content">
-                <div class="spinner"></div>
-                <p>SYNCING ASSETS...</p>
+    <div id="ui-layer">
+        <div id="preloader">
+            <div class="loader-box">
+                <div class="loader-title">NEO SYSTEM BOOT</div>
+                <div class="progress-container"><div id="progress-bar"></div></div>
+                <div class="status-text">INITIALIZING...</div>
             </div>
         </div>
 
-        <div id="main-menu" class="screen">
-            <div class="menu-content">
-                <h1>BLOCK BLAST<br><span class="hardcore">HARDCORE</span></h1>
-                
-                <div id="start-btn" class="neo-button">
-                    <span class="btn-text">INITIALIZE SYSTEM</span>
-                    <div class="btn-glow"></div>
-                </div>
+        <div id="main-menu" class="screen active">
+            <h1 class="logo">BLOCK BLAST<br><span class="neon">HARDCORE</span></h1>
+            <div class="menu-actions">
+                <button id="start-btn" class="neo-btn">START SESSION</button>
+                <button class="neo-btn secondary">CONFIG</button>
             </div>
         </div>
 
         <div id="game-screen" class="screen">
             <div id="hud">
-                <div id="score-display">SCORE: 0000</div>
-                <div id="timer-bar">
-                    <div id="timer-fill"></div>
-                </div>
+                <div class="score-box">SCORE: <span id="score">0000</span></div>
+                <div class="timer-wrap"><div id="timer-fill"></div></div>
             </div>
-
+            
             <div id="canvas-wrapper">
                 <canvas id="game-canvas"></canvas>
             </div>
 
             <div id="hotbar">
-                <div class="figure-slot" data-slot="0"></div>
-                <div class="figure-slot" data-slot="1"></div>
-                <div class="figure-slot" data-slot="2"></div>
+                <div class="slot" data-slot="0"></div>
+                <div class="slot" data-slot="1"></div>
+                <div class="slot" data-slot="2"></div>
             </div>
         </div>
     </div>
-
     <script src="game.js"></script>
 </body>
 </html>
