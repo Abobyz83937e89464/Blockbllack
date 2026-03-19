@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Block Blast HARDCORE</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <div id="screen-wrapper">
+            <div id="preloader" class="active">
+                <div class="loader">Loading...</div>
+            </div>
+
+            <div id="main-menu" class="screen">
+                <div class="background-overlay"></div>
+                <h1>BLOCK BLAST<br><span class="hardcore">HARDCORE</span></h1>
+                <button id="start-btn" class="ui-button">
+                    <span>НАЧАТЬ</span>
+                </button>
+            </div>
+
+            <div id="game-screen" class="screen">
+                <div id="score-display">СЧЕТ: 0</div>
+                <canvas id="game-canvas"></canvas>
+                <canvas id="vfx-canvas"></canvas> </div>
+
+            <div id="final-screen" class="screen">
+                <div class="white-overlay"></div>
+                <canvas id="final-canvas"></canvas> </div>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>
