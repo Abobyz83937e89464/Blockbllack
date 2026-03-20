@@ -17,10 +17,14 @@
         <canvas id="cosmic-canvas"></canvas>
     </div>
 
+    <!-- Multi-layer flash system -->
     <div id="white-flash" class="white-flash"></div>
+    <div id="red-flash" class="red-flash"></div>
 
+    <!-- Ascension cinematic overlay -->
     <div id="ascension-overlay" class="ascension-overlay">
         <div id="ascension-text" class="ascension-text"></div>
+        <div id="question-marks" class="question-marks"></div>
     </div>
 
     <div id="ui-layer">
@@ -46,15 +50,11 @@
                 <div id="hud">
                     <div class="hud-row">
                         <div class="score-box">SCORE: <span id="score">0000</span></div>
-                        <div id="auto-sword-timer-box" class="timer-box hidden">
-                            <div class="timer-label">MAIN SWORD</div>
-                            <div class="timer-bar-wrap">
-                                <div id="main-sword-fill" class="timer-fill main"></div>
-                            </div>
-                            <div class="timer-label divine">DIVINE SWORD</div>
-                            <div class="timer-bar-wrap">
-                                <div id="divine-sword-fill" class="timer-fill divine"></div>
-                            </div>
+                        <div id="timer-box" class="timer-box hidden">
+                            <div class="timer-label gold">⚔ MAIN SWORD</div>
+                            <div class="timer-bar-wrap"><div id="main-sword-fill" class="timer-fill main"></div></div>
+                            <div class="timer-label purple">✦ DIVINE SWORD</div>
+                            <div class="timer-bar-wrap"><div id="divine-sword-fill" class="timer-fill divine"></div></div>
                         </div>
                     </div>
                     <div id="boss-hud" class="boss-hud hidden">
@@ -81,7 +81,7 @@
 
         <div id="game-over-screen" class="screen">
             <div class="game-over-box">
-                <div class="go-icon">💀</div>
+                <div class="go-icon-wrap"><img id="go-skull" class="go-skull" src="" alt="💀"></div>
                 <h1 class="game-over-title">DIVINE<br>RETRIBUTION</h1>
                 <div class="game-over-score">SCORE: <span id="final-score">0000</span></div>
                 <div class="game-over-sub">The Nameless Deity has judged you unworthy.</div>
